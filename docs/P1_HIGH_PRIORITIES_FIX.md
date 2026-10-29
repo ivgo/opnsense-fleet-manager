@@ -244,23 +244,34 @@ grep "CSRFMiddleware" backend/app/main.py
 ### I-H2: pgBackRest Backups - Not Started  
 **Effort:** 2 days
 
-### I-H3: gRPC TLS - Not Started  
+### I-H3: gRPC TLS - ✅ Completed  
 **Effort:** 0.5 day
+- Server: TLS, optional client cert, required client cert (mTLS)
+- Client: TLS/mTLS channel factory with service token auth
+- Config: GRPC_TLS_CA_CERT_PATH, GRPC_REQUIRE_CLIENT_CERT
 
-### A-H1: NAT/VLAN Apply - Not Started  
-**Effort:** 3 days
+### A-H1: NAT/VLAN Apply - ✅ Backend Implemented  
+**Effort:** 3 days (backend done, UI pending)
+- `POST /api/v1/nat/apply` — NAT deployment with dry_run
+- `POST /api/v1/interfaces/vlans/apply` — VLAN deployment with dry_run
+- Both use idempotent `needs_update()` comparison
 
-### A-H2: IPsec Idempotency - Not Started  
-**Effort:** 1 day
+### A-H2: IPsec Idempotency - ✅ Implemented  
+**Effort:** 1 day (in VpnPolicyDeployer)
+- WireGuard, IPsec (IKEv2), OpenVPN all use `needs_update()`
+- Ownership marker `OFME-` for lifecycle management
 
-### A-H3: Audit UI - Not Started  
+### A-H3: Audit UI - ✅ Implemented  
 **Effort:** 2 days
+- Frontend: `AuditPage.tsx` with search, filters, integrity check, CSV export
+- Backend: `/api/v1/audit/` search, integrity, actions, export, events
 
-### A-H4: Notification Inbox - Already Implemented  
+### A-H4: Notification Inbox - ✅ Already Implemented  
 **Status:** Feature exists in production code
 
-### A-H5: SSO Tests - Not Started  
+### A-H5: SSO Tests - ✅ Added  
 **Effort:** 0.5 day
+- `tests/test_sso.py`: LDAP, OIDC, SAML, Entra ID, providers listing
 
 ---
 

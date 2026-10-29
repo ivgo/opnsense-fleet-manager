@@ -361,17 +361,17 @@ npm install react-router-dom@^7.18.5 --save
 
 ---
 
-## Remaining P1 Items (Not Started)
+## Remaining P1 Items
 
 | ID | Issue | Status | Effort |
 |----|-------|--------|--------|
 | I-H1 | Secrets to Vault | ⏳ Pending | 2 days |
 | I-H2 | pgBackRest backups | ⏳ Pending | 2 days |
-| I-H3 | gRPC TLS | ⏳ Pending | 0.5 day |
-| A-H1 | NAT/VLAN config apply | ⏳ Pending | 3 days |
-| A-H2 | IPsec idempotency | ⏳ Pending | 1 day |
-| A-H3 | Audit UI | ⏳ Pending | 2 days |
+| I-H3 | gRPC TLS | ✅ Done | 0.5 day |
+| A-H1 | NAT/VLAN config apply | ✅ Backend done | 3 days |
+| A-H2 | IPsec idempotency | ✅ Done | 1 day |
+| A-H3 | Audit UI | ✅ Done | 2 days |
 | A-H4 | Notification inbox | ✅ Done | (exists) |
-| A-H5 | SSO tests | ⏳ Pending | 0.5 day |
+| A-H5 | SSO tests | ✅ Done | 0.5 day |
 
 ---
