@@ -12,7 +12,8 @@ from app.api.deps import SessionDep, TenantDep, require_permissions
 from app.models.inventory import ClientDevice, ClientSource, ClientStatus
 from app.rbac.permissions import P
 from app.repositories import UnitOfWork
-from app.schemas.operations import ClientDeviceBlock, ClientDeviceOut, ClientDevicePause, Message, VendorInfo
+from app.schemas.common import Message
+from app.schemas.operations import ClientDeviceBlock, ClientDeviceOut, ClientDevicePause, VendorInfo
 from app.services.inventory import InventoryService
 
 router = APIRouter(prefix="/inventory", tags=["Inventory"])

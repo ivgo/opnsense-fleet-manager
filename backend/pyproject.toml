@@ -44,7 +44,8 @@ dependencies = [
     "croniter==6.0.0",
     "reportlab==4.2.5",
     "lxml==5.3.0",
-    "signxml==3.2.2",
+    "signxml==4.2.2",
+    "pyopenssl>=24.0.0",
 ]
 
 [project.optional-dependencies]
