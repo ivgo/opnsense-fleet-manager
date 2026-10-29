@@ -47,6 +47,24 @@ x-backend: &backend
   networks: [ofme]
 
 services:
+  vault:
+    image: hashicorp/vault:1.18
+    container_name: ofme-vault
+    command: server -dev -dev-root-token-id=ofme-dev-token
+    expose:
+      - "8200"
+    ports:
+      - "8200:8200"
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: ofme-dev-token
+      VAULT_ADDR: http://localhost:8200
+    cap_add:
+      - IPC_LOCK
+    volumes:
+      - ofme-vault:/vault/data
+    restart: unless-stopped
+    networks: [ofme]
+
   alertmanager:
     image: prom/alertmanager:v0.27.0
     command:
@@ -332,6 +350,7 @@ volumes:
   ofme-grafana:
   ofme-loki:
   ofme-alertmanager:
+  ofme-vault:
 
 networks:
   ofme:

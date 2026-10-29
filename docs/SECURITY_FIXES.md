@@ -393,6 +393,14 @@ openssl x509 -req -in grpc_client.csr -CA grpc_server.crt -CAkey grpc_server.key
 - [x] B-H2: Refresh token HMAC pepper
 - [x] B-H4: CORS headers documented/restricted
 - [x] F-H4: CSRF double-submit cookie protection
+- [x] I-H1: Vault KV v2 integration (hvac client)
+- [x] I-H3: gRPC TLS/mTLS
+- [x] B-H3: Device credentials in Vault
+- [x] A-H1: NAT/VLAN config apply (backend)
+- [x] A-H2: IPsec idempotency
+- [x] A-H3: Audit UI
+- [x] A-H4: Notification inbox (existing)
+- [x] A-H5: SSO integration tests
 
 ---
 
@@ -400,7 +408,7 @@ openssl x509 -req -in grpc_client.csr -CA grpc_server.crt -CAkey grpc_server.key
 
 | ID | Issue | Status | Effort |
 |----|-------|--------|--------|
-| I-H1 | Secrets to Vault | ⏳ Pending | 2 days |
+| I-H1 | Secrets to Vault | ✅ Done | 2 days |
 | I-H2 | pgBackRest backups | ⏳ Pending | 2 days |
 | I-H3 | gRPC TLS | ✅ Done | 0.5 day |
 | A-H1 | NAT/VLAN config apply | ✅ Backend done | 3 days |
@@ -408,5 +416,7 @@ openssl x509 -req -in grpc_client.csr -CA grpc_server.crt -CAkey grpc_server.key
 | A-H3 | Audit UI | ✅ Done | 2 days |
 | A-H4 | Notification inbox | ✅ Done | (exists) |
 | A-H5 | SSO tests | ✅ Done | 0.5 day |
+| B-H3 | Device creds to Vault | ✅ Done | 2 days |
+| B-H5 | Firewall approval workflow | ⏳ Pending | 1 day |
 
 ---

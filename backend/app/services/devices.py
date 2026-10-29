@@ -17,6 +17,7 @@ from app.core.events import DeviceRegistered, DeviceStatusChanged, event_bus
 from app.core.exceptions import BadRequestError, ConflictError, LicenseLimitError, NotFoundError
 from app.core.logging import get_logger
 from app.core.security import decrypt_secret, encrypt_secret
+from app.integrations.vault import secret_backend
 from app.models.enums import (
     CertificateStatus,
     ConnectionStatus,
@@ -125,14 +126,25 @@ class DeviceService:
             tags=payload.tags,
             status=DeviceStatus.REGISTERED,
         )
-        if payload.api_key:
-            device.api_key_encrypted = encrypt_secret(payload.api_key)
-        if payload.api_secret:
-            device.api_secret_encrypted = encrypt_secret(payload.api_secret)
+        # Store credentials – if Vault is enabled we store encrypted values there, otherwise keep envelope-encrypted fields locally.
         if payload.api_key and payload.api_secret:
+            if settings.VAULT_ENABLED:
+                # Store encrypted credentials in Vault under devices/<device_id>
+                # We need device ID after flush; use a temporary placeholder and store after ID is known.
+                pass  # placeholder – actual storage done after flush
+            else:
+                device.api_key_encrypted = encrypt_secret(payload.api_key)
+                device.api_secret_encrypted = encrypt_secret(payload.api_secret)
             device.connection_status = ConnectionStatus.UNKNOWN
         self.session.add(device)
         await self.session.flush()
+        # After flush we have device.id – store credentials in Vault if needed.
+        if payload.api_key and payload.api_secret and settings.VAULT_ENABLED:
+            path = f"devices/{device.id}"  # using numeric ID as path segment
+            await secret_backend().put(path, {
+                "api_key_encrypted": encrypt_secret(payload.api_key),
+                "api_secret_encrypted": encrypt_secret(payload.api_secret),
+            })
 
         await self.audit.record(
             action="device.created",
@@ -174,10 +186,33 @@ class DeviceService:
         api_secret = data.pop("api_secret", None)
         for field, value in data.items():
             setattr(device, field, value)
-        if api_key:
-            device.api_key_encrypted = encrypt_secret(api_key)
-        if api_secret:
-            device.api_secret_encrypted = encrypt_secret(api_secret)
+        # Update credentials – if Vault is enabled we store encrypted values there, otherwise keep envelope-encrypted fields locally.
+        if api_key and api_secret:
+            if settings.VAULT_ENABLED:
+                path = f"devices/{device_id}"
+                await secret_backend().put(path, {
+                    "api_key_encrypted": encrypt_secret(api_key),
+                    "api_secret_encrypted": encrypt_secret(api_secret),
+                })
+            else:
+                device.api_key_encrypted = encrypt_secret(api_key)
+                device.api_secret_encrypted = encrypt_secret(api_secret)
+        elif api_key:
+            if settings.VAULT_ENABLED:
+                path = f"devices/{device_id}"
+                existing = await secret_backend().get(path) or {}
+                existing["api_key_encrypted"] = encrypt_secret(api_key)
+                await secret_backend.put(path, existing)
+            else:
+                device.api_key_encrypted = encrypt_secret(api_key)
+        elif api_secret:
+            if settings.VAULT_ENABLED:
+                path = f"devices/{device_id}"
+                existing = await secret_backend().get(path) or {}
+                existing["api_secret_encrypted"] = encrypt_secret(api_secret)
+                await secret_backend.put(path, existing)
+            else:
+                device.api_secret_encrypted = encrypt_secret(api_secret)
 
         await self.session.flush()
         await self.audit.record(
@@ -193,6 +228,10 @@ class DeviceService:
 
     async def delete(self, device_id: uuid.UUID) -> None:
         device = await self.uow.devices.get_or_404(device_id)
+        # Clean up Vault credentials if enabled
+        if settings.VAULT_ENABLED:
+            path = f"devices/{device_id}"
+            await secret_backend().delete(path)
         await self.uow.devices.delete(device)
         await self.audit.record(
             action="device.deleted",
@@ -235,9 +274,23 @@ class DeviceService:
         )
 
     async def credentials(self, device: Device) -> tuple[str, str, str]:
-        if not device.ip_address or not device.api_key_encrypted or not device.api_secret_encrypted:
-            raise BadRequestError(f"Device '{device.name}' has no OPNsense API credentials configured")
+        if not device.ip_address:
+            raise BadRequestError(f"Device '{device.name}' has no IP address configured")
         base_url = f"https://{device.ip_address}:{device.api_port}"
+
+        # Try Vault first if enabled
+        if settings.VAULT_ENABLED:
+            path = f"devices/{device.id}"
+            vault_creds = await secret_backend().get(path)
+            if vault_creds:
+                api_key = decrypt_secret(vault_creds.get("api_key_encrypted", ""))
+                api_secret = decrypt_secret(vault_creds.get("api_secret_encrypted", ""))
+                if api_key and api_secret:
+                    return base_url, api_key, api_secret
+
+        # Fallback to local encrypted fields
+        if not device.api_key_encrypted or not device.api_secret_encrypted:
+            raise BadRequestError(f"Device '{device.name}' has no OPNsense API credentials configured")
         return base_url, decrypt_secret(device.api_key_encrypted), decrypt_secret(device.api_secret_encrypted)
 
     async def summary(self) -> dict[str, int]:

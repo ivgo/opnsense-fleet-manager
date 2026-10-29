@@ -237,9 +237,13 @@ grep "CSRFMiddleware" backend/app/main.py
 
 ## Remaining P1 Items (Partial Progress)
 
-### I-H1: Secrets to Vault - Not Started
+### I-H1: Secrets to Vault - ✅ Completed  
 **Effort:** 2 days  
-**Blockers:** No vault agent running, requires infrastructure setup
+- Vault KV v2 integration via hvac client
+- Startup secret loading for SECRET_KEY, REFRESH_TOKEN_PEPPER, DB password, MinIO password
+- Device credentials stored in Vault (B-H3)
+- Health check endpoint at `/api/v1/health/ready`
+- Dev mode Vault in docker-compose
 
 ### I-H2: pgBackRest Backups - Not Started  
 **Effort:** 2 days
@@ -306,7 +310,7 @@ Production-deployment-ready fixes: 7
 
 ## Next Steps
 
-1. 🔄 Continue with remaining P1 items (Vault, pgBackRest, gRPC TLS, etc.)
+1. 🔄 Complete remaining P1 items (pgBackRest backups I-H2, firewall approval workflow B-H5)
 2. 🔐 Test all fixes in staging environment
 3. 📊 Update SECURITY_FIXES.md with completion status
 4. 🚀 Deploy to staging for verification

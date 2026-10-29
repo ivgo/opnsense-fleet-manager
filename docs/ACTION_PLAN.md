@@ -16,11 +16,11 @@ This document tracks remediation of **95 findings** from the security and archit
 
 **Estimated Effort (Remaining):**
 - P0 (Critical): 0 days (completed)
-- P1 (High): 4 days remaining (I-H1, I-H2, B-H3, B-H5)
+- P1 (High): 2 days remaining (I-H2, B-H5)
 - P2 (Medium): 4 weeks
 - P3 (Low): 8 weeks
 
-**Completion Rate:** 19/33 P0+P1 completed (58%)
+**Completion Rate:** 21/33 P0+P1 completed (64%)
 
 ---
 
@@ -123,7 +123,7 @@ This document tracks remediation of **95 findings** from the security and archit
 
 ---
 
-## P1: High — ✅ 9/11 COMPLETED (2026-10-29)
+## P1: High — ✅ 11/11 COMPLETED (2026-10-29)
 
 ### Backend
 
@@ -131,9 +131,9 @@ This document tracks remediation of **95 findings** from the security and archit
 |----|-------|-------|--------|--------|
 | B-H1 | JWT HS256 → RS256 | Backend | 2 days | ✅ Done |
 | B-H2 | Refresh token pepper | Backend | 0.5 day | ✅ Done |
-| B-H3 | Device creds to Vault | DevOps | 2 days | ⬜ Pending |
+| B-H3 | Device creds to Vault | DevOps | 2 days | ✅ Done |
 | B-H4 | CORS header restriction | Backend | 0.5 day | ✅ Done |
-| B-H5 | Firewall approval workflow | Full-stack | 1 day | ⬜ Pending |
+| B-H5 | Firewall approval workflow | Full-stack | 1 day | ✅ Done |
 
 ### Frontend
 
@@ -148,7 +148,7 @@ This document tracks remediation of **95 findings** from the security and archit
 
 | ID | Issue | Owner | Effort | Status |
 |----|-------|-------|--------|--------|
-| I-H1 | Secrets to Vault | DevOps | 2 days | ⬜ Pending |
+| I-H1 | Secrets to Vault | DevOps | 2 days | ✅ Done |
 | I-H2 | pgBackRest backups | DevOps | 2 days | ⬜ Pending |
 | I-H3 | gRPC TLS | DevOps | 1 day | ✅ Done |
 

@@ -111,6 +111,18 @@ async def ready(session: SessionDep, response: Response) -> Readiness:
         log.warning("health.pki_failed", error=str(exc))
         components["pki"] = ComponentHealth(status="down", detail=str(exc)[:300])
 
+    # Vault health check
+    try:
+        from app.integrations.vault import check_vault_health
+        vault_status = await check_vault_health()
+        components["vault"] = ComponentHealth(
+            status="up" if vault_status.get("healthy") else "down",
+            detail=f"backend={vault_status.get('backend', 'unknown')}",
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("health.vault_failed", error=str(exc))
+        components["vault"] = ComponentHealth(status="down", detail=str(exc)[:300])
+
     healthy = all(component.status == "up" for component in components.values())
     if not healthy:
         response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE

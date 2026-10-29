@@ -9,7 +9,10 @@ from contextvars import ContextVar
 
 import structlog
 
-from app.core.config import settings
+# Lazy import to avoid circular dependency
+def _get_settings():
+    from app.core.config import settings
+    return settings
 
 request_id_ctx: ContextVar[str] = ContextVar("request_id", default="-")
 tenant_id_ctx: ContextVar[str] = ContextVar("tenant_id", default="-")
@@ -20,13 +23,13 @@ def _add_context(_logger, _method, event_dict: dict) -> dict:
     event_dict.setdefault("request_id", request_id_ctx.get())
     event_dict.setdefault("tenant_id", tenant_id_ctx.get())
     event_dict.setdefault("user_id", user_id_ctx.get())
-    event_dict.setdefault("service", settings.OTEL_SERVICE_NAME)
-    event_dict.setdefault("env", settings.ENVIRONMENT)
+    event_dict.setdefault("service", _get_settings().OTEL_SERVICE_NAME)
+    event_dict.setdefault("env", _get_settings().ENVIRONMENT)
     return event_dict
 
 
 def configure_logging() -> None:
-    level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
+    level = getattr(logging, _get_settings().LOG_LEVEL.upper(), logging.INFO)
 
     shared_processors = [
         structlog.contextvars.merge_contextvars,
@@ -40,7 +43,7 @@ def configure_logging() -> None:
 
     renderer = (
         structlog.processors.JSONRenderer()
-        if settings.LOG_JSON
+        if _get_settings().LOG_JSON
         else structlog.dev.ConsoleRenderer(colors=True)
     )
 

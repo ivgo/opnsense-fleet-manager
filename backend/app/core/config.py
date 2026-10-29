@@ -123,6 +123,11 @@ class Settings(BaseSettings):
     VAULT_TOKEN: str = ""
     VAULT_MOUNT_POINT: str = "secret"
     VAULT_ENABLED: bool = False
+    # Vault secret paths (optional - if set, secrets are read from Vault at startup)
+    VAULT_SECRET_KEY_PATH: str = ""  # e.g., "ofme/secret-key"
+    VAULT_REFRESH_PEPPER_PATH: str = ""  # e.g., "ofme/refresh-pepper"
+    VAULT_DB_PASSWORD_PATH: str = ""  # e.g., "ofme/database/password"
+    VAULT_MINIO_PASSWORD_PATH: str = ""  # e.g., "ofme/minio/password"
 
     # ---------------------------------------------------------------- git providers
     GITHUB_API_URL: str = "https://api.github.com"
@@ -214,9 +219,108 @@ class Settings(BaseSettings):
         return mapping
 
 
+import asyncio
+import os
+
+# Lazy-loaded Vault secrets - loaded once at startup
+_vault_secrets_loaded = False
+
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    return Settings()
+    global _vault_secrets_loaded
+    cfg = Settings()
+    # Load secrets from Vault if enabled and paths are provided.
+    # Import is deferred to avoid a circular import: vault.py imports
+    # app.core.config.settings, and app.integrations.__init__ imports
+    # app.integrations.git.providers which imports settings.
+    # Import directly from the vault module to avoid triggering app.integrations.__init__
+    if cfg.VAULT_ENABLED and not _vault_secrets_loaded:
+        # Use synchronous hvac client to load secrets at startup
+        # This avoids asyncio.run() issues during uvicorn startup
+        try:
+            import hvac
+            client = hvac.Client(
+                url=cfg.VAULT_ADDR,
+                token=cfg.VAULT_TOKEN if cfg.VAULT_TOKEN else None,
+            )
+            mount_point = cfg.VAULT_MOUNT_POINT
+
+            # SECRET_KEY
+            if cfg.VAULT_SECRET_KEY_PATH:
+                try:
+                    result = client.secrets.kv.v2.read_secret_version(
+                        path=cfg.VAULT_SECRET_KEY_PATH,
+                        mount_point=mount_point,
+                    )
+                    if result and "data" in result and "data" in result["data"]:
+                        values = result["data"]["data"]
+                        # Get first value
+                        val = next(iter(values.values()), None)
+                        if val:
+                            cfg.SECRET_KEY = val
+                except Exception:
+                    pass  # Secret not found, keep default
+
+            # REFRESH_TOKEN_PEPPER
+            if cfg.VAULT_REFRESH_PEPPER_PATH:
+                try:
+                    result = client.secrets.kv.v2.read_secret_version(
+                        path=cfg.VAULT_REFRESH_PEPPER_PATH,
+                        mount_point=mount_point,
+                    )
+                    if result and "data" in result and "data" in result["data"]:
+                        values = result["data"]["data"]
+                        val = next(iter(values.values()), None)
+                        if val:
+                            cfg.REFRESH_TOKEN_PEPPER = val
+                except Exception:
+                    pass
+
+            # DATABASE password
+            if cfg.VAULT_DB_PASSWORD_PATH:
+                try:
+                    result = client.secrets.kv.v2.read_secret_version(
+                        path=cfg.VAULT_DB_PASSWORD_PATH,
+                        mount_point=mount_point,
+                    )
+                    if result and "data" in result and "data" in result["data"]:
+                        values = result["data"]["data"]
+                        val = next(iter(values.values()), None)
+                        if val:
+                            # Replace password in DATABASE_URL
+                            parts = cfg.DATABASE_URL.split('@')
+                            if len(parts) == 2:
+                                cred, rest = parts
+                                user = cred.split(':')[1].split('//')[1]
+                                cfg.DATABASE_URL = f"postgresql+asyncpg://{user}:{val}@{rest}"
+                except Exception:
+                    pass
+
+            # MinIO password
+            if cfg.VAULT_MINIO_PASSWORD_PATH:
+                try:
+                    result = client.secrets.kv.v2.read_secret_version(
+                        path=cfg.VAULT_MINIO_PASSWORD_PATH,
+                        mount_point=mount_point,
+                    )
+                    if result and "data" in result and "data" in result["data"]:
+                        values = result["data"]["data"]
+                        val = next(iter(values.values()), None)
+                        if val:
+                            cfg.S3_SECRET_KEY = val
+                except Exception:
+                    pass
+        except ImportError:
+            pass  # hvac not installed, skip Vault loading
+        except Exception:
+            pass  # Vault not accessible, skip
+
+        _vault_secrets_loaded = True
+    return cfg
+
+
+# Resolve Literal forward references for pydantic 2.x
+Settings.model_rebuild()
 
 
 settings = get_settings()
