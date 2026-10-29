@@ -245,10 +245,44 @@ async def _authenticate(token: str) -> Principal:
 @router.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket,
-    token: str = Query(..., description="JWT access token or API key"),
+    token: str = Query(None, description="Legacy fallback; prefer cookie-based auth"),
 ) -> None:
+    """WebSocket endpoint with secure token authentication.
+
+    Authentication priority:
+    1. HttpOnly ``ofme_access_token`` cookie (browser default, no token in URL)
+    2. ``ofme-auth`` Sec-WebSocket-Protocol subprotocol (non-browser clients)
+    3. Legacy ``?token=`` query parameter (backward compatibility only)
+
+    Tokens are never sent in the URL for browser clients, preventing exposure
+    in browser history, proxy logs and server access logs.
+    """
+    # Primary: HttpOnly cookie (browser sends automatically)
+    auth_token = websocket.cookies.get("ofme_access_token")
+
+    # Secondary: subprotocol header for non-browser clients
+    if not auth_token:
+        subprotocols = websocket.headers.get("sec-websocket-protocol", "")
+        for proto in subprotocols.split(","):
+            proto = proto.strip()
+            if proto.startswith("ofme-auth."):
+                auth_token = proto[len("ofme-auth."):]
+                break
+
+    # Tertiary: legacy query parameter
+    if not auth_token and token:
+        auth_token = token
+
+    if not auth_token:
+        await websocket.accept()
+        await websocket.send_text(
+            json.dumps({"type": "error", "code": "unauthenticated", "message": "Missing auth token"})
+        )
+        await websocket.close(code=4401)
+        return
+
     try:
-        principal = await _authenticate(token)
+        principal = await _authenticate(auth_token)
     except AuthenticationError as exc:
         await websocket.accept()
         await websocket.send_text(

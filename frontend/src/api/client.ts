@@ -91,6 +91,15 @@ function applyAuthHeaders(config: InternalAxiosRequestConfig): void {
   if (token && token !== "cookie") config.headers.set("Authorization", `Bearer ${token}`);
   const tenantId = getTenantId();
   if (tenantId) config.headers.set("X-Tenant-Id", tenantId);
+
+  // CSRF token for state-changing operations (double-submit cookie pattern)
+  const csrfCookie = document.cookie
+    .split("; ")
+    .find(row => row.startsWith("ofme_csrf_token="))
+    ?.split("=")[1];
+  if (csrfCookie) {
+    config.headers.set("X-CSRF-Token", csrfCookie);
+  }
 }
 
 export const api: AxiosInstance = axios.create({

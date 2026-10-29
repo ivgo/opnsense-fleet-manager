@@ -38,6 +38,7 @@ from app.cqrs.commands import register_handlers
 from app.db.session import dispose_engine
 from app.observability import (
     BodySizeLimitMiddleware,
+    CSRFMiddleware,
     RequestContextMiddleware,
     SecurityHeadersMiddleware,
     setup_tracing,
@@ -197,10 +198,13 @@ def create_app() -> FastAPI:
             "X-Gitlab-Event",
             "X-GitHub-Event",
             "X-GitHub-Delivery",
+            "X-CSRF-Token",  # CSRF token header
         ],
-        expose_headers=["X-Request-ID", "Content-Disposition"],
+        expose_headers=["X-Request-ID", "Content-Disposition", "X-CSRF-Token"],
         max_age=600,
     )
+    # CORS headers restricted to minimal required set - no internal auth headers exposed
+    app.add_middleware(CSRFMiddleware)
     app.add_middleware(RequestContextMiddleware)
 
     # ------------------------------------------------------------------ routes

@@ -26,6 +26,7 @@ from app.core.security import (
     generate_totp_secret,
     hash_backup_code,
     hash_password,
+    hash_refresh_token,
     token_fingerprint,
     totp_provisioning_uri,
     verify_password,
@@ -117,7 +118,7 @@ class AuthService:
             user_id=user.id,
             tenant_id=user.tenant_id,
             jti=jti,
-            token_hash=token_fingerprint(refresh),
+            token_hash=hash_refresh_token(refresh),
             expires_at=expires_at,
             ip_address=ip,
             user_agent=(user_agent or "")[:512] or None,
@@ -333,7 +334,7 @@ class AuthService:
             raise AuthenticationError("Refresh token is not active")
         if record.expires_at <= datetime.now(UTC):
             raise AuthenticationError("Refresh token expired")
-        if record.token_hash != token_fingerprint(refresh_token):
+        if record.token_hash != hash_refresh_token(refresh_token):
             record.revoked_at = datetime.now(UTC)
             await self.session.commit()
             raise AuthenticationError("Refresh token mismatch")

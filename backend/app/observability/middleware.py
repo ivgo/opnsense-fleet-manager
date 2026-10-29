@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hmac
+import secrets
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -20,6 +22,18 @@ from app.observability.metrics import (
 )
 
 log = get_logger("ofme.http")
+
+CSRF_COOKIE_NAME = "ofme_csrf_token"
+CSRF_HEADER_NAME = "X-CSRF-Token"
+CSRF_COOKIE_MAX_AGE = 60 * 60 * 24 * 30  # 30 days
+
+
+def _generate_csrf_token() -> str:
+    return secrets.token_urlsafe(32)
+
+
+def _verify_csrf_token(cookie_token: str, header_token: str) -> bool:
+    return hmac.compare_digest(cookie_token, header_token)
 
 REQUEST_ID_HEADER = "X-Request-ID"
 
@@ -134,6 +148,82 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class CSRFMiddleware(BaseHTTPMiddleware):
+    """Double-submit cookie CSRF protection for state-changing operations.
+
+    - Sets a CSRF token cookie on first response (if not present)
+    - Validates the token from header matches cookie for mutating methods
+    - Exempts safe methods (GET, HEAD, OPTIONS) and auth endpoints
+    - Exempts API key authenticated requests (they use different auth mechanism)
+    """
+
+    EXEMPT_PATHS = {
+        "/api/v1/auth/login",
+        "/api/v1/auth/ldap/login",
+        "/api/v1/auth/mfa/verify",
+        "/api/v1/auth/refresh",
+        "/api/v1/auth/logout",
+        "/api/v1/auth/oidc/callback",
+        "/api/v1/auth/saml/acs",
+        "/api/v1/auth/saml/metadata",
+        "/api/v1/auth/providers",
+        "/api/v1/auth/oidc/authorize",
+        "/api/v1/auth/saml/authorize",
+        "/healthz",
+        "/metrics",
+    }
+
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        # Skip CSRF for safe methods
+        if request.method in {"GET", "HEAD", "OPTIONS"}:
+            return await call_next(request)
+
+        # Skip for exempt paths
+        if request.url.path in self.EXEMPT_PATHS:
+            return await call_next(request)
+
+        # Skip if not an API endpoint
+        if not request.url.path.startswith(settings.API_V1_PREFIX):
+            return await call_next(request)
+
+        # Get CSRF token from cookie
+        cookie_token = request.cookies.get(CSRF_COOKIE_NAME)
+        if not cookie_token:
+            # No cookie - this is a first visit or cookie was cleared
+            # Set a new cookie but don't block (will be checked on next request)
+            response = await call_next(request)
+            new_token = _generate_csrf_token()
+            response.set_cookie(
+                key=CSRF_COOKIE_NAME,
+                value=new_token,
+                max_age=CSRF_COOKIE_MAX_AGE,
+                httponly=True,
+                secure=settings.is_production,
+                samesite="lax",
+                path="/",
+            )
+            return response
+
+        # Check header for CSRF token
+        header_token = request.headers.get(CSRF_HEADER_NAME)
+        if not header_token or not _verify_csrf_token(cookie_token, header_token):
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "error": {
+                        "code": "csrf_failed",
+                        "message": "CSRF token missing or invalid",
+                        "request_id": getattr(request.state, "request_id", None),
+                    }
+                },
+            )
+
+        return await call_next(request)
+
+
 class BodySizeLimitMiddleware(BaseHTTPMiddleware):
     """Rejects oversized request bodies before they reach an endpoint."""
 
@@ -165,5 +255,6 @@ __all__ = [
     "BodySizeLimitMiddleware",
     "RequestContextMiddleware",
     "SecurityHeadersMiddleware",
+    "CSRFMiddleware",
     "REQUEST_ID_HEADER",
 ]

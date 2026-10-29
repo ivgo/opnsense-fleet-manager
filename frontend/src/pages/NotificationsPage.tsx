@@ -24,6 +24,7 @@ import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import { Link as RouterLink } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import DOMPurify from "dompurify";
 import { toApiError } from "@/api/client";
 import { notificationsApi } from "@/api/endpoints";
 import { qk } from "@/api/queryKeys";
@@ -59,6 +60,24 @@ const EMPTY_FORM: NotificationFormState = {
   action_url: "",
   channels: "",
 };
+
+/**
+ * Sanitize notification message content against XSS.
+ *
+ * Notification messages may contain user-supplied or system-supplied text.
+ * Even though React auto-escapes text in JSX, notification messages are also
+ * rendered through the `dangerouslySetInnerHTML`-free CodeBlock component and
+ * MUI Typography.  DOMPurify is applied as defense-in-depth so that any
+ * script/iframe/vector embedded in a message cannot execute.
+ */
+function sanitizeMessage(message: string): string {
+  return DOMPurify.sanitize(message, {
+    ALLOWED_TAGS: ["b", "i", "strong", "em", "u", "br", "code", "pre", "a"],
+    ALLOWED_ATTR: ["href", "title", "target", "rel"],
+    ADD_ATTR: ["target"],
+    ADD_REL: ["noopener", "noreferrer"],
+  });
+}
 
 function deliveryColor(status: string): "success" | "error" | "default" {
   if (status === "sent") return "success";
@@ -182,7 +201,7 @@ export function NotificationsPage() {
               {row.title}
             </Typography>
             <Typography variant="caption" color="text.secondary" noWrap display="block">
-              {row.message}
+              {sanitizeMessage(row.message)}
             </Typography>
           </Box>
         </Stack>
@@ -383,7 +402,7 @@ export function NotificationsPage() {
             <DialogContent dividers>
               <Stack spacing={2}>
                 <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
-                  {selected.message}
+                  {sanitizeMessage(selected.message)}
                 </Typography>
                 <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
                   <Typography variant="caption" color="text.secondary">

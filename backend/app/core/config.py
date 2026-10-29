@@ -29,7 +29,10 @@ class Settings(BaseSettings):
 
     # ---------------------------------------------------------------- security
     SECRET_KEY: str = Field(..., min_length=32)
-    JWT_ALGORITHM: str = "HS256"
+    JWT_ALGORITHM: str = "RS256"
+    JWT_PRIVATE_KEY_PATH: str = ""
+    JWT_PUBLIC_KEY_PATH: str = ""
+    REFRESH_TOKEN_PEPPER: str = ""  # HMAC pepper for refresh token hashing (generate with: openssl rand -hex 32)
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     PASSWORD_MIN_LENGTH: int = 12

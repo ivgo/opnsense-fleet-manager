@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { getAccessToken, SESSION_EXPIRED_EVENT } from "@/api/tokenStore";
+import { SESSION_EXPIRED_EVENT } from "@/api/tokenStore";
 
 export type WebSocketStatus = "idle" | "connecting" | "open" | "closed";
 
@@ -103,18 +103,15 @@ export function useWebSocket(topics: string[], options: UseWebSocketOptions = {}
     };
 
     const connect = () => {
-      const token = getAccessToken();
-      if (!token) {
-        updateStatus("closed");
-        return;
-      }
+      // Token is delivered via HttpOnly cookie (browser sends automatically).
+      // No token in URL — prevents exposure in browser history and server logs.
       clearTimers();
       updateStatus("connecting");
 
-      const url = `${wsBaseUrl()}/ws?token=${encodeURIComponent(token)}`;
+      const url = `${wsBaseUrl()}/ws`;
       let socket: WebSocket;
       try {
-        socket = new WebSocket(url);
+        socket = new WebSocket(url, ["ofme-auth"]);
       } catch {
         scheduleReconnect();
         return;
