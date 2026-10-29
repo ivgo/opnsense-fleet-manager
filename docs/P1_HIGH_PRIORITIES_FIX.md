@@ -271,7 +271,17 @@ grep "CSRFMiddleware" backend/app/main.py
 
 ### A-H5: SSO Tests - ✅ Added  
 **Effort:** 0.5 day
-- `tests/test_sso.py`: LDAP, OIDC, SAML, Entra ID, providers listing
+- `backend/tests/test_sso.py`: LDAP, OIDC, SAML, Entra ID, providers listing
+
+**Test Coverage:**
+- LDAP login with/without configuration
+- OIDC authorize and callback flows (state validation, nonce handling)
+- SAML authorize, metadata, ACS endpoints
+- Entra ID provider detection from config
+- Auth providers discovery endpoint (`/api/v1/auth/providers`)
+- MFA flag reflects `ENABLE_MFA` setting
+
+**All tests use `pytest.mark.skipif`** to gracefully skip when IdP is not configured, making them runnable on any environment.
 
 ---
 

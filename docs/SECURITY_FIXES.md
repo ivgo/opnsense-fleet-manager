@@ -334,6 +334,41 @@ npm install react-router-dom@^7.18.5 --save
 
 ---
 
+### I-H3: gRPC TLS / mTLS ✅
+
+**Files Changed:**
+- [`backend/app/core/config.py`](../backend/app/core/config.py) - Added GRPC_TLS_CA_CERT_PATH, GRPC_REQUIRE_CLIENT_CERT
+- [`backend/app/grpc/server.py`](../backend/app/grpc/server.py) - Server TLS with optional/required client cert
+- [`backend/app/grpc/client.py`](../backend/app/grpc/client.py) (NEW) - TLS/mTLS channel factory
+- [`.env.example`](../.env.example) - Certificate generation instructions
+
+**Changes:**
+1. Server supports three modes:
+   - TLS only (server cert, no client auth)
+   - TLS + optional client cert verification
+   - mTLS (required client cert signed by specified CA)
+2. Client factory (`get_channel()`, `get_stub()`) handles all three modes
+3. Service token auth (`x-ofme-token`) still required for all RPC calls
+4. Certificate generation documented in `.env.example`
+
+**Testing:**
+```bash
+# Generate server cert
+openssl req -x509 -newkey rsa:2048 -nodes -keyout grpc_server.key -out grpc_server.crt -days 365 -subj "/CN=ofme-grpc"
+
+# Generate client cert signed by server CA
+openssl req -newkey rsa:2048 -nodes -keyout grpc_client.key -out grpc_client.csr -subj "/CN=ofme-client"
+openssl x509 -req -in grpc_client.csr -CA grpc_server.crt -CAkey grpc_server.key -CAcreateserial -out grpc_client.crt -days 365
+
+# Configure in .env:
+# GRPC_TLS_CERT_PATH=/etc/ofme/grpc/grpc_server.crt
+# GRPC_TLS_KEY_PATH=/etc/ofme/grpc/grpc_server.key
+# GRPC_TLS_CA_CERT_PATH=/etc/ofme/grpc/grpc_server.crt  # same as server cert for self-signed CA
+# GRPC_REQUIRE_CLIENT_CERT=true
+```
+
+---
+
 ### F-H4: CSRF Protection ✅
 
 **Files Changed:**
