@@ -1,0 +1,39 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: ofme
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: ofme
+spec:
+  description: OPNsense Fleet Manager Enterprise
+  sourceRepos:
+    - https://github.com/ofme/ofme.git
+    - https://github.com/ofme/ofme-charts.git
+    - ghcr.io/ofme/charts
+  destinations:
+    - namespace: ofme
+      server: https://kubernetes.default.svc
+    - namespace: ofme-staging
+      server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+    - group: networking.k8s.io
+      kind: IngressClass
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+  roles:
+    - name: platform-admin
+      description: Full control over OFME applications
+      policies:
+        - p, proj:ofme:platform-admin, applications, *, ofme/*, allow
+      groups:
+        - ofme-platform
+    - name: auditor
+      description: Read-only access
+      policies:
+        - p, proj:ofme:auditor, applications, get, ofme/*, allow
+      groups:
+        - ofme-audit

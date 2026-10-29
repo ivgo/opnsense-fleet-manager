@@ -1,0 +1,46 @@
+{{- $host := "" -}}
+{{- if .Values.ingress.enabled -}}
+{{- $host = (index .Values.ingress.hosts 0).host -}}
+{{- end -}}
+OPNsense Fleet Manager Enterprise has been installed.
+
+Namespace: {{ .Release.Namespace }}
+Release:   {{ .Release.Name }}
+
+{{- if .Values.ingress.enabled }}
+Console:   https://{{ $host }}/
+API:       https://{{ $host }}/api/v1
+OpenAPI:   https://{{ $host }}/api/v1/openapi.json   (when ENABLE_DOCS=true)
+{{- else }}
+The ingress is disabled. Reach the services with port-forwarding:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/ofme-api 8000:8000
+  kubectl -n {{ .Release.Namespace }} port-forward svc/ofme-frontend 8080:8080
+{{- end }}
+
+Before the first login:
+
+1. Create the application secret (if `secrets.create` is false):
+     kubectl -n {{ .Release.Namespace }} create secret generic {{ .Values.secrets.existingSecret }} \
+       --from-literal=SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(48))')" \
+       --from-literal=DATABASE_URL='postgresql+asyncpg://...' \
+       --from-literal=REDIS_URL='redis://...' \
+       --from-literal=CELERY_BROKER_URL='redis://.../1' \
+       --from-literal=CELERY_RESULT_BACKEND='redis://.../2' \
+       --from-literal=S3_ENDPOINT='https://...' \
+       --from-literal=S3_ACCESS_KEY='...' \
+       --from-literal=S3_SECRET_KEY='...' \
+       --from-literal=BOOTSTRAP_ADMIN_PASSWORD='<one-time-password>'
+
+2. Provide the CA material in `{{ .Values.pki.existingSecret }}`:
+     cd backend && python scripts/init_pki.py --output ../pki
+     kubectl -n {{ .Release.Namespace }} create secret generic {{ .Values.pki.existingSecret }} \
+       --from-file=ca.crt=../pki/ca.crt --from-file=ca.key=../pki/ca.key
+
+3. Restart the API so migrations and bootstrap run:
+     kubectl -n {{ .Release.Namespace }} rollout restart deploy/{{ include "ofme.fullname" . }}-api
+
+4. Sign in with {{ .Values.config.BOOTSTRAP_ADMIN_EMAIL }} and the bootstrap
+   password, then remove the value from the secret and change the password.
+
+Health endpoints:
+  /api/v1/health/live, /api/v1/health/ready, /metrics

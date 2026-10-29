@@ -1,0 +1,127 @@
+<?xml version="1.0"?>
+<model>
+    <mount>//OPNsense/fleetagent</mount>
+    <description>OFME Fleet Agent configuration</description>
+    <version>1.0.0</version>
+    <items>
+        <enabled type="BooleanField">
+            <default>0</default>
+            <Required>N</Required>
+        </enabled>
+
+        <platform_url type="TextField">
+            <Required>Y</Required>
+            <default>https://ofme.example.com</default>
+            <mask>/^https:\/\/[A-Za-z0-9][A-Za-z0-9.\-]*(:\d{1,5})?(\/[A-Za-z0-9._~\-\/]*)?$/</mask>
+            <ValidationMessage>Enter an https:// URL, optionally including the /api/v1 suffix.</ValidationMessage>
+        </platform_url>
+
+        <enrollment_token type="TextField">
+            <default></default>
+            <Constraints>
+                <check001>
+                    <type>LengthConstraint</type>
+                    <min>0</min>
+                    <max>512</max>
+                    <ValidationMessage>The enrollment token must not exceed 512 characters.</ValidationMessage>
+                </check001>
+            </Constraints>
+        </enrollment_token>
+
+        <device_id type="TextField">
+            <default></default>
+        </device_id>
+
+        <device_name type="TextField">
+            <default></default>
+        </device_name>
+
+        <certificate_serial type="TextField">
+            <default></default>
+        </certificate_serial>
+
+        <ca_fingerprint type="TextField">
+            <default></default>
+        </ca_fingerprint>
+
+        <heartbeat_url type="TextField">
+            <default></default>
+        </heartbeat_url>
+
+        <heartbeat_interval type="IntegerField">
+            <default>60</default>
+            <MinimumValue>15</MinimumValue>
+            <MaximumValue>3600</MaximumValue>
+        </heartbeat_interval>
+
+        <config_interval type="IntegerField">
+            <default>300</default>
+            <MinimumValue>60</MinimumValue>
+            <MaximumValue>86400</MaximumValue>
+        </config_interval>
+
+        <renew_before_days type="IntegerField">
+            <default>30</default>
+            <MinimumValue>1</MinimumValue>
+            <MaximumValue>365</MaximumValue>
+        </renew_before_days>
+
+        <request_timeout type="IntegerField">
+            <default>20</default>
+            <MinimumValue>5</MinimumValue>
+            <MaximumValue>120</MaximumValue>
+        </request_timeout>
+
+        <verify_tls type="BooleanField">
+            <default>1</default>
+        </verify_tls>
+
+        <proxy_url type="TextField">
+            <default></default>
+            <Constraints>
+                <check001>
+                    <type>LengthConstraint</type>
+                    <min>0</min>
+                    <max>255</max>
+                    <ValidationMessage>The proxy URL must not exceed 255 characters.</ValidationMessage>
+                </check001>
+            </Constraints>
+        </proxy_url>
+
+        <apply_aliases type="BooleanField">
+            <default>0</default>
+        </apply_aliases>
+
+        <apply_firewall_rules type="BooleanField">
+            <default>0</default>
+        </apply_firewall_rules>
+
+        <log_level type="OptionField">
+            <default>info</default>
+            <OptionValues>
+                <info>Info</info>
+                <warning>Warning</warning>
+                <debug>Debug</debug>
+            </OptionValues>
+        </log_level>
+
+        <last_seen type="TextField">
+            <default></default>
+        </last_seen>
+
+        <last_config_hash type="TextField">
+            <default></default>
+        </last_config_hash>
+
+        <last_error type="TextField">
+            <default></default>
+            <Constraints>
+                <check001>
+                    <type>LengthConstraint</type>
+                    <min>0</min>
+                    <max>1024</max>
+                </check001>
+            </Constraints>
+        </last_error>
+    </items>
+</model>

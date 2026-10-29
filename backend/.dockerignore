@@ -1,0 +1,21 @@
+# Build context hygiene for the API image.
+.venv/
+**/__pycache__/
+**/*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+junit.xml
+tests/
+.git/
+.gitignore
+*.md
+!README.md
+.env
+.env.*
+*.key
+*.pem
+pki/

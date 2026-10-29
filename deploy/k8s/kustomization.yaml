@@ -1,0 +1,32 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ofme
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - serviceaccounts.yaml
+  - datastores.yaml
+  - api.yaml
+  - worker.yaml
+  - beat.yaml
+  - frontend.yaml
+  - ingress.yaml
+  - hpa.yaml
+  - pdb.yaml
+  - networkpolicy.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: ofme
+  app.kubernetes.io/managed-by: kustomize
+
+images:
+  - name: ghcr.io/ofme/ofme-api
+    newTag: 1.0.0
+  - name: ghcr.io/ofme/ofme-frontend
+    newTag: 1.0.0
+
+# Secrets are intentionally excluded. Create them before applying:
+#   kubectl apply -f deploy/k8s/secret.yaml
+# or with `backend/scripts/init_pki.py --kubectl-secret` plus `kubectl create secret`.

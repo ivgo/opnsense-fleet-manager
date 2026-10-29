@@ -1,0 +1,103 @@
+// =============================================================================
+// OPNsense Fleet Manager Enterprise - gRPC contracts
+//
+// The REST API remains the public surface. This service is the contract for
+// internal automation (reporting pipelines, SIEM connectors, Terraform/Ansible
+// providers) that prefer typed RPC over HTTP.
+//
+// Authentication: metadata key `x-ofme-token` must equal GRPC_SERVICE_TOKEN.
+// Tenancy: every request carries an explicit tenant_id; the server never infers
+// it, so a token for one tenant cannot read another tenant's inventory.
+//
+// Regenerate the Python stubs with:
+//   backend/scripts/generate_grpc.py
+// =============================================================================
+syntax = "proto3";
+
+package ofme.fleet.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+option java_package = "io.ofme.fleet.v1";
+option java_outer_classname = "FleetProto";
+option csharp_namespace = "Ofme.Fleet.V1";
+option go_package = "github.com/ofme/ofme/proto/gen/ofme/fleet/v1;fleetv1";
+
+// ------------------------------------------------------------------ messages
+message DeviceInfo {
+  string id = 1;
+  string tenant_id = 2;
+  string name = 3;
+  string hostname = 4;
+  string description = 5;
+  string status = 6;
+  string connection_status = 7;
+  string firmware_version = 8;
+  string agent_version = 9;
+  string model = 10;
+  string serial_number = 11;
+  string ip_address = 12;
+  string site_id = 13;
+  string group_id = 14;
+  bool is_ha = 15;
+  string ha_role = 16;
+  repeated string tags = 17;
+  google.protobuf.Timestamp last_seen_at = 18;
+  google.protobuf.Timestamp created_at = 19;
+  google.protobuf.Timestamp updated_at = 20;
+}
+
+message GetDeviceRequest {
+  string tenant_id = 1;
+  string device_id = 2;
+}
+
+message ListDevicesRequest {
+  string tenant_id = 1;
+  // 1-based page number.
+  int32 page = 2;
+  // Page size, capped at 500 by the server.
+  int32 size = 3;
+  // Optional DeviceStatus filter (online, offline, registered, ...).
+  string status = 4;
+  // Optional case-insensitive substring match on name/hostname/serial.
+  string search = 5;
+}
+
+message ListDevicesResponse {
+  repeated DeviceInfo devices = 1;
+  int32 page = 2;
+  int32 size = 3;
+  int64 total = 4;
+  int32 pages = 5;
+}
+
+message GetFleetSummaryRequest {
+  string tenant_id = 1;
+}
+
+message FleetSummary {
+  int64 total = 1;
+  int64 online = 2;
+  int64 offline = 3;
+  int64 error = 4;
+  int64 maintenance = 5;
+  int64 unregistered = 6;
+  int64 registered = 7;
+  int64 ha_devices = 8;
+  int64 drift_findings = 9;
+  google.protobuf.Timestamp generated_at = 10;
+}
+
+// ------------------------------------------------------------------ service
+service FleetRegistry {
+  // Fetch one device by id inside the caller's tenant.
+  rpc GetDevice(GetDeviceRequest) returns (DeviceInfo);
+
+  // Paginated inventory listing.
+  rpc ListDevices(ListDevicesRequest) returns (ListDevicesResponse);
+
+  // Aggregated counters used by status dashboards and external reporting.
+  rpc GetFleetSummary(GetFleetSummaryRequest) returns (FleetSummary);
+}

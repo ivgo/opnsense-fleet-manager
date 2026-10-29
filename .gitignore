@@ -1,0 +1,54 @@
+# ---------------------------------------------------------------- secrets / local state
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+!deploy/**/secret.example.yaml
+pki/
+backups/
+*.sql.gz
+
+# ---------------------------------------------------------------- python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+junit.xml
+
+# ---------------------------------------------------------------- node
+node_modules/
+.vite/
+frontend/dist/
+frontend/coverage/
+*.tsbuildinfo
+npm-debug.log*
+
+# ---------------------------------------------------------------- containers / k8s
+*.tgz
+.deploy-tmp/
+kubeconfig
+*.kubeconfig
+
+# ---------------------------------------------------------------- editors / os
+.idea/
+.vscode/
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------------------------------------------------------------- plugin artefacts
+plugin/os-fleet-agent/work/
+plugin/os-fleet-agent/*.pkg
+plugin/os-fleet-agent/*.txz

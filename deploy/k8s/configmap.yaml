@@ -1,0 +1,61 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ofme-config
+  namespace: ofme
+  labels:
+    app.kubernetes.io/name: ofme
+    app.kubernetes.io/component: configuration
+data:
+  ENVIRONMENT: production
+  DEBUG: "false"
+  LOG_LEVEL: INFO
+  LOG_JSON: "true"
+  ENABLE_DOCS: "false"
+  ALLOWED_HOSTS: ofme.example.com
+  CORS_ORIGINS: https://ofme.example.com
+  TRUSTED_PROXY_IPS: 10.0.0.0/8
+  RATE_LIMIT_ENABLED: "true"
+  RATE_LIMIT_REQUESTS: "600"
+  RATE_LIMIT_AUTH_REQUESTS: "20"
+  RATE_LIMIT_WINDOW_SECONDS: "60"
+  ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+  REFRESH_TOKEN_EXPIRE_DAYS: "7"
+  PASSWORD_MIN_LENGTH: "12"
+  LOGIN_MAX_FAILURES: "5"
+  LOGIN_LOCK_MINUTES: "15"
+  ENABLE_MFA: "true"
+  MFA_ISSUER: OFME
+  DB_POOL_SIZE: "10"
+  DB_MAX_OVERFLOW: "20"
+  DB_POOL_RECYCLE_SECONDS: "1800"
+  S3_REGION: us-east-1
+  S3_USE_SSL: "true"
+  S3_BUCKET_BACKUPS: ofme-backups
+  S3_BUCKET_ARTIFACTS: ofme-artifacts
+  # Empty for the bundled MinIO (no KMS); set AES256 / aws:kms for managed S3.
+  S3_SERVER_SIDE_ENCRYPTION: ""
+  PKI_CA_CERT_PATH: /etc/ofme/pki/ca.crt
+  PKI_CA_KEY_PATH: /etc/ofme/pki/ca.key
+  PKI_DEVICE_VALIDITY_DAYS: "365"
+  PKI_RENEW_BEFORE_DAYS: "30"
+  PKI_KEY_SIZE: "3072"
+  ENROLLMENT_TOKEN_TTL_MINUTES: "60"
+  HEARTBEAT_INTERVAL_SECONDS: "60"
+  DEVICE_OFFLINE_AFTER_SECONDS: "180"
+  METRIC_RETENTION_DAYS: "90"
+  AUDIT_RETENTION_DAYS: "2555"
+  WEBHOOK_TIMEOUT_SECONDS: "15"
+  OPNsense_TIMEOUT_SECONDS: "20"
+  OPNsense_VERIFY_TLS: "true"
+  DEFAULT_TENANT_SLUG: default
+  BOOTSTRAP_ADMIN_EMAIL: admin@example.com
+  OTEL_ENABLED: "true"
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.observability.svc.cluster.local:4318
+  OTEL_SERVICE_NAME: ofme-api
+  # Internal gRPC inventory API. Enable only together with the
+  # GRPC_SERVICE_TOKEN key in `ofme-secrets`, and keep port 50051 off the ingress.
+  GRPC_ENABLED: "false"
+  GRPC_BIND: 0.0.0.0:50051
+  WAIT_FOR_DB: "true"
+  RUN_MIGRATIONS: "true"

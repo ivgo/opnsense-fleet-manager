@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<menu>
+    <Services>
+        <FleetAgent>
+            <Visible>true</Visible>
+            <Order>60</Order>
+            <Url>/ui/fleetagent</Url>
+            <Title>OFME Fleet Agent</Title>
+        </FleetAgent>
+    </Services>
+</menu>

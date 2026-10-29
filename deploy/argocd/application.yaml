@@ -1,0 +1,73 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ofme-production
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: ofme
+    environment: production
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: ofme
+  source:
+    repoURL: https://github.com/ofme/ofme.git
+    targetRevision: main
+    path: deploy/helm/ofme
+    helm:
+      releaseName: ofme
+      valueFiles:
+        - values.yaml
+      values: |
+        image:
+          api:
+            tag: "1.0.0"
+          frontend:
+            tag: "1.0.0"
+        ingress:
+          hosts:
+            - host: ofme.example.com
+              paths:
+                - path: /api
+                  pathType: Prefix
+                  service: api
+                - path: /ws
+                  pathType: Prefix
+                  service: api
+                - path: /
+                  pathType: Prefix
+                  service: frontend
+          tls:
+            - secretName: ofme-tls
+              hosts:
+                - ofme.example.com
+        config:
+          ENVIRONMENT: production
+          ALLOWED_HOSTS: ofme.example.com
+          CORS_ORIGINS: https://ofme.example.com
+          ENABLE_DOCS: "false"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ofme
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+  revisionHistoryLimit: 20
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas

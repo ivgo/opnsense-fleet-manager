@@ -1,0 +1,121 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ofme-beat
+  namespace: ofme
+  labels:
+    app.kubernetes.io/name: ofme
+    app.kubernetes.io/component: beat
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ofme
+      app.kubernetes.io/component: beat
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ofme
+        app.kubernetes.io/component: beat
+    spec:
+      serviceAccountName: ofme-worker
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: beat
+          image: ghcr.io/ofme/ofme-api:1.0.0
+          imagePullPolicy: IfNotPresent
+          command:
+            - celery
+            - -A
+            - app.workers.celery_app:celery_app
+            - beat
+            - --loglevel=INFO
+            - --schedule=/var/lib/ofme/celerybeat-schedule
+          envFrom:
+            - configMapRef:
+                name: ofme-config
+          env:
+            - name: WAIT_FOR_DB
+              value: "false"
+            - name: RUN_MIGRATIONS
+              value: "false"
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ofme-secrets
+                  key: SECRET_KEY
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ofme-secrets
+                  key: DATABASE_URL
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ofme-secrets
+                  key: REDIS_URL
+            - name: CELERY_BROKER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ofme-secrets
+                  key: CELERY_BROKER_URL
+            - name: CELERY_RESULT_BACKEND
+              valueFrom:
+                secretKeyRef:
+                  name: ofme-secrets
+                  key: CELERY_RESULT_BACKEND
+          volumeMounts:
+            - name: schedule
+              mountPath: /var/lib/ofme
+            - name: tmp
+              mountPath: /tmp
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "test -f /var/lib/ofme/celerybeat-schedule"]
+            initialDelaySeconds: 60
+            periodSeconds: 60
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 384Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: schedule
+          persistentVolumeClaim:
+            claimName: ofme-beat
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ofme-beat
+  namespace: ofme
+  labels:
+    app.kubernetes.io/name: ofme
+    app.kubernetes.io/component: beat
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 128Mi

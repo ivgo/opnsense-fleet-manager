@@ -1,0 +1,164 @@
+groups:
+  - name: ofme-availability
+    interval: 30s
+    rules:
+      - alert: OFMEApiDown
+        expr: up{job="ofme-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: ofme-api
+        annotations:
+          summary: "OFME API is not scrapeable"
+          description: "Prometheus has failed to scrape {{ $labels.instance }} for more than 2 minutes."
+          runbook: "docs/OPERATIONS.md#api-unavailable"
+
+      - alert: OFMEHighErrorRate
+        expr: |
+          sum(rate(ofme_http_requests_total{status=~"5.."}[5m]))
+            /
+          clamp_min(sum(rate(ofme_http_requests_total[5m])), 0.001)
+            > 0.05
+        for: 10m
+        labels:
+          severity: critical
+          service: ofme-api
+        annotations:
+          summary: "5xx error ratio above 5%"
+          description: "{{ $value | humanizePercentage }} of requests failed with a 5xx status over the last 10 minutes."
+          runbook: "docs/OPERATIONS.md#elevated-error-rate"
+
+      - alert: OFMESlowRequests
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(ofme_http_request_duration_seconds_bucket[5m]))
+          ) > 1.0
+        for: 10m
+        labels:
+          severity: warning
+          service: ofme-api
+        annotations:
+          summary: "p95 API latency above 1s"
+          description: "The 95th percentile request latency is {{ $value | humanizeDuration }}."
+          runbook: "docs/OPERATIONS.md#high-latency"
+
+      - alert: OFMEExceptionBurst
+        expr: sum(rate(ofme_http_exceptions_total[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: ofme-api
+        annotations:
+          summary: "Domain/HTTP exceptions raised continuously"
+          description: "{{ $value | humanize }} exceptions/second are being recorded."
+
+      - alert: OFMERateLimitSpike
+        expr: sum(rate(ofme_rate_limited_total{scope="auth"}[5m])) > 1
+        for: 10m
+        labels:
+          severity: warning
+          service: ofme-api
+        annotations:
+          summary: "Authentication requests are being rate limited"
+          description: "{{ $value | humanize }} auth requests/second were rejected with 429 over 5 minutes; possible credential stuffing or a retry loop."
+          runbook: "docs/OPERATIONS.md#metrics-catalogue"
+
+  - name: ofme-fleet
+    interval: 60s
+    rules:
+      - alert: OFMENoDeviceHeartbeats
+        expr: sum(rate(ofme_device_heartbeats_total[15m])) == 0
+        for: 15m
+        labels:
+          severity: warning
+          service: ofme-ingest
+        annotations:
+          summary: "No device heartbeats received for 15 minutes"
+          description: "Every managed firewall is silent. Check the public ingress, the agent plugin and Redis."
+          runbook: "docs/OPERATIONS.md#devices-offline"
+
+      - alert: OFMEHeartbeatRejections
+        expr: |
+          sum(rate(ofme_device_heartbeats_total{result!="ok"}[10m]))
+            /
+          clamp_min(sum(rate(ofme_device_heartbeats_total[10m])), 0.001)
+            > 0.1
+        for: 15m
+        labels:
+          severity: warning
+          service: ofme-ingest
+        annotations:
+          summary: "More than 10% of heartbeats are rejected"
+          description: "Certificate, tenant or payload validation is failing for a significant share of agents."
+          runbook: "docs/OPERATIONS.md#heartbeat-rejections"
+
+      - alert: OFMEWebSocketDrop
+        expr: ofme_websocket_connections == 0 and on() (sum(rate(ofme_http_requests_total[10m])) > 0)
+        for: 30m
+        labels:
+          severity: info
+        annotations:
+          summary: "No WebSocket clients connected"
+          description: "The console has no live connection; real-time updates may be broken."
+
+  - name: ofme-governance
+    interval: 60s
+    rules:
+      - alert: OFMEAuditChainBroken
+        expr: ofme_audit_chain_valid == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: ofme-audit
+        annotations:
+          summary: "Audit hash chain verification failed"
+          description: "The tamper-evident audit trail no longer verifies. Preserve the database and follow the incident runbook."
+          runbook: "docs/OPERATIONS.md#audit-chain-broken"
+
+      - alert: OFMEPolicyDriftHigh
+        expr: ofme_policy_drift_findings > 25
+        for: 1h
+        labels:
+          severity: warning
+          service: ofme-policy
+        annotations:
+          summary: "More than 25 unresolved drift findings"
+          description: "{{ $value }} device configuration objects differ from the desired policy."
+
+      - alert: OFMEComplianceScoreLow
+        expr: ofme_compliance_score < 70
+        for: 2h
+        labels:
+          severity: warning
+          service: ofme-compliance
+        annotations:
+          summary: "Compliance score below 70%"
+          description: "Framework {{ $labels.framework }} scored {{ $value }}."
+
+      - alert: OFMEBackupFailures
+        expr: |
+          sum(rate(ofme_backups_total{result!="success"}[1h]))
+            /
+          clamp_min(sum(rate(ofme_backups_total[1h])), 0.001)
+            > 0.2
+        for: 30m
+        labels:
+          severity: warning
+          service: ofme-backup
+        annotations:
+          summary: "More than 20% of backups failed in the last hour"
+          description: "Check object storage credentials, bucket capacity and device API reachability."
+          runbook: "docs/OPERATIONS.md#backup-failures"
+
+      - alert: OFMEJobFailures
+        expr: |
+          sum(rate(ofme_jobs_finished_total{status="failed"}[15m])) > 0.2
+        for: 15m
+        labels:
+          severity: warning
+          service: ofme-worker
+        annotations:
+          summary: "Background jobs are failing"
+          description: "{{ $value | humanize }} failed jobs per second across Celery queues."
+          runbook: "docs/OPERATIONS.md#worker-backlog"

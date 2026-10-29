@@ -1,0 +1,87 @@
+<?xml version="1.0"?>
+<form>
+    <field>
+        <type>header</type>
+        <label>Service</label>
+    </field>
+    <field>
+        <id>enabled</id>
+        <label>Enable OFME Fleet Agent</label>
+        <type>checkbox</type>
+        <help>Runs the agent as a supervised service. Enroll the firewall before enabling the service.</help>
+    </field>
+    <field>
+        <id>platform_url</id>
+        <label>Platform URL</label>
+        <type>text</type>
+        <help>Base URL of the OFME control plane, for example https://ofme.example.com. The agent appends /api/v1 unless the URL already ends with it.</help>
+    </field>
+    <field>
+        <id>enrollment_token</id>
+        <label>Enrollment token</label>
+        <type>password</type>
+        <help>One-time token created in OFME under Zero-touch provisioning. It is cleared automatically after a successful enrollment.</help>
+    </field>
+    <field>
+        <id>verify_tls</id>
+        <label>Verify platform TLS certificate</label>
+        <type>checkbox</type>
+        <help>Keep enabled. Disable only for the initial bootstrap against a platform that uses a private CA, then import the CA below and re-enable verification.</help>
+    </field>
+    <field>
+        <id>proxy_url</id>
+        <label>HTTPS proxy</label>
+        <type>text</type>
+        <help>Optional proxy URL, for example http://proxy.example.com:3128. Leave empty for a direct connection.</help>
+    </field>
+    <field>
+        <type>header</type>
+        <label>Scheduling</label>
+    </field>
+    <field>
+        <id>heartbeat_interval</id>
+        <label>Heartbeat interval (seconds)</label>
+        <type>number</type>
+        <help>How often telemetry is published. The platform advertises its preferred interval during enrollment; this value is clamped to 15-3600 seconds.</help>
+    </field>
+    <field>
+        <id>config_interval</id>
+        <label>Configuration poll interval (seconds)</label>
+        <type>number</type>
+        <help>How often the desired configuration is fetched. Changes are only applied when the matching apply switch is enabled.</help>
+    </field>
+    <field>
+        <id>renew_before_days</id>
+        <label>Renew certificate before (days)</label>
+        <type>number</type>
+        <help>The agent requests a renewed certificate when the remaining lifetime drops below this threshold.</help>
+    </field>
+    <field>
+        <id>request_timeout</id>
+        <label>Request timeout (seconds)</label>
+        <type>number</type>
+        <help>Connect and read timeout for calls to the platform.</help>
+    </field>
+    <field>
+        <type>header</type>
+        <label>Policy application</label>
+    </field>
+    <field>
+        <id>apply_aliases</id>
+        <label>Apply managed aliases</label>
+        <type>checkbox</type>
+        <help>Creates, updates and removes only aliases whose description starts with OFME- (the trailing hyphen is required by OPNsense). All other aliases are left untouched.</help>
+    </field>
+    <field>
+        <id>apply_firewall_rules</id>
+        <label>Apply managed firewall rules</label>
+        <type>checkbox</type>
+        <help>Applies only firewall rules tagged OFME- and reloads the filter afterwards. Requires apply_aliases for rules that reference managed aliases. Review the preview before enabling this on production firewalls.</help>
+    </field>
+    <field>
+        <id>log_level</id>
+        <label>Log level</label>
+        <type>dropdown</type>
+        <help>Debug logging includes request identifiers and command results.</help>
+    </field>
+</form>

@@ -1,0 +1,168 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ofme-worker
+  namespace: ofme
+  labels:
+    app.kubernetes.io/name: ofme
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ofme
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ofme
+        app.kubernetes.io/component: worker
+    spec:
+      serviceAccountName: ofme-worker
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 180
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker
+          image: ghcr.io/ofme/ofme-api:1.0.0
+          imagePullPolicy: IfNotPresent
+          command:
+            - celery
+            - -A
+            - app.workers.celery_app:celery_app
+            - worker
+            - --loglevel=INFO
+            - --concurrency=4
+            - --queues=ofme
+            - --hostname=worker@%h
+            - --max-tasks-per-child=500
+          envFrom:
+            - configMapRef:
+                name: ofme-config
+          env:
+            - name: WAIT_FOR_DB
+              value: "false"
+            - name: RUN_MIGRATIONS
+              value: "false"
+            - name: OTEL_SERVICE_NAME
+              value: ofme-worker
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ofme-secrets
+                  key: SECRET_KEY
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ofme-secrets
+                  key: DATABASE_URL
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ofme-secrets
+                  key: REDIS_URL
+            - name: CELERY_BROKER_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ofme-secrets
+                  key: CELERY_BROKER_URL
+            - name: CELERY_RESULT_BACKEND
+              valueFrom:
+                secretKeyRef:
+                  name: ofme-secrets
+                  key: CELERY_RESULT_BACKEND
+            - name: S3_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: ofme-secrets
+                  key: S3_ENDPOINT
+            - name: S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ofme-secrets
+                  key: S3_ACCESS_KEY
+            - name: S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: ofme-secrets
+                  key: S3_SECRET_KEY
+            - name: GITHUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: ofme-secrets
+                  key: GITHUB_TOKEN
+                  optional: true
+            - name: GITLAB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: ofme-secrets
+                  key: GITLAB_TOKEN
+                  optional: true
+            - name: AZURE_DEVOPS_PAT
+              valueFrom:
+                secretKeyRef:
+                  name: ofme-secrets
+                  key: AZURE_DEVOPS_PAT
+                  optional: true
+          volumeMounts:
+            - name: pki
+              mountPath: /etc/ofme/pki
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - celery -A app.workers.celery_app:celery_app inspect ping -d worker@$(hostname) | grep -q pong
+            initialDelaySeconds: 60
+            periodSeconds: 60
+            timeoutSeconds: 25
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - celery -A app.workers.celery_app:celery_app inspect ping -d worker@$(hostname) | grep -q pong
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 25
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 500m
+              memory: 768Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: pki
+          secret:
+            secretName: ofme-pki
+            defaultMode: 0400
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi

@@ -1,0 +1,108 @@
+#!/bin/sh
+#
+# PROVIDE: os_fleet_agent
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+#
+# OFME Fleet Agent service wrapper. The agent itself writes its PID file and
+# holds an exclusive lock, so a duplicate start exits immediately.
+
+. /etc/rc.subr
+
+name="os_fleet_agent"
+rcvar="${name}_enable"
+start_cmd="${name}_start"
+stop_cmd="${name}_stop"
+status_cmd="${name}_status"
+
+pidfile="/var/run/os_fleet_agent.pid"
+agent_script="/usr/local/opnsense/scripts/OPNsense/FleetAgent/agent.php"
+agent_php="/usr/local/bin/php"
+agent_log="/var/log/ofme-agent.log"
+
+load_rc_config "${name}"
+: "${os_fleet_agent_enable:="NO"}"
+
+daemon_bin="/usr/local/sbin/daemon"
+if [ ! -x "${daemon_bin}" ]; then
+    daemon_bin="/usr/sbin/daemon"
+fi
+
+is_running()
+{
+    if [ ! -s "${pidfile}" ]; then
+        return 1
+    fi
+    pid=$(cat "${pidfile}" 2>/dev/null)
+    case "${pid}" in
+        ''|*[!0-9]*)
+            return 1
+            ;;
+    esac
+    kill -0 "${pid}" 2>/dev/null
+}
+
+os_fleet_agent_start()
+{
+    if is_running; then
+        echo "os_fleet_agent is already running as pid $(cat "${pidfile}")."
+        return 0
+    fi
+    if [ ! -x "${agent_php}" ] || [ ! -f "${agent_script}" ]; then
+        echo "os_fleet_agent: PHP or the agent script is missing." >&2
+        return 1
+    fi
+    rm -f "${pidfile}"
+    echo -n "Starting os_fleet_agent."
+    "${daemon_bin}" -p "${pidfile}" "${agent_php}" "${agent_script}" daemon
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        if is_running; then
+            echo " done."
+            return 0
+        fi
+        echo -n "."
+        sleep 1
+    done
+    echo " failed."
+    if [ -f "${agent_log}" ]; then
+        tail -n 20 "${agent_log}" >&2
+    fi
+    return 1
+}
+
+os_fleet_agent_stop()
+{
+    if ! is_running; then
+        echo "os_fleet_agent is not running."
+        rm -f "${pidfile}"
+        return 0
+    fi
+    pid=$(cat "${pidfile}")
+    echo -n "Stopping os_fleet_agent (pid ${pid})."
+    kill -TERM "${pid}" 2>/dev/null
+    for _ in $(seq 1 30); do
+        if ! kill -0 "${pid}" 2>/dev/null; then
+            echo " done."
+            rm -f "${pidfile}"
+            return 0
+        fi
+        echo -n "."
+        sleep 1
+    done
+    echo " timeout, killing."
+    kill -KILL "${pid}" 2>/dev/null
+    rm -f "${pidfile}"
+    return 0
+}
+
+os_fleet_agent_status()
+{
+    if is_running; then
+        echo "os_fleet_agent is running as pid $(cat "${pidfile}")."
+        return 0
+    fi
+    echo "os_fleet_agent is not running."
+    return 1
+}
+
+run_rc_command "$1"

@@ -1,0 +1,73 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ofme-staging
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: ofme
+    environment: staging
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: ofme
+  source:
+    repoURL: https://github.com/ofme/ofme.git
+    targetRevision: develop
+    path: deploy/helm/ofme
+    helm:
+      releaseName: ofme
+      valueFiles:
+        - values.yaml
+      values: |
+        image:
+          api:
+            tag: "develop"
+          frontend:
+            tag: "develop"
+        api:
+          replicaCount: 1
+          autoscaling:
+            enabled: false
+        worker:
+          replicaCount: 1
+          autoscaling:
+            enabled: false
+        frontend:
+          replicaCount: 1
+          pdb:
+            enabled: false
+        ingress:
+          hosts:
+            - host: ofme-staging.example.com
+              paths:
+                - path: /
+                  pathType: Prefix
+                  service: frontend
+          tls:
+            - secretName: ofme-staging-tls
+              hosts:
+                - ofme-staging.example.com
+        config:
+          ENVIRONMENT: staging
+          DEBUG: "true"
+          ENABLE_DOCS: "true"
+          ALLOWED_HOSTS: ofme-staging.example.com
+          CORS_ORIGINS: https://ofme-staging.example.com
+          RUN_MIGRATIONS: "true"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ofme-staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PruneLast=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  revisionHistoryLimit: 10

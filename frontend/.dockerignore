@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+.vite/
+*.tsbuildinfo
+npm-debug.log*
+.git/
+.gitignore
+.env
+.env.*
+*.md
+!README.md

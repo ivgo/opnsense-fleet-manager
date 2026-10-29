@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<plugin>
+    <name>os-fleet-agent</name>
+    <version>1.0.0</version>
+    <title>OFME Fleet Agent</title>
+    <description>
+        Connects this OPNsense firewall to OPNsense Fleet Manager Enterprise (OFME).
+        The agent enrolls the firewall with an X.509 device certificate, publishes
+        heartbeat telemetry, polls for operational commands, renews its certificate
+        automatically and can apply the centrally managed alias and firewall policy.
+    </description>
+    <author>SaarLor-Computec GmbH</author>
+    <license>BSD2CLAUSE</license>
+    <target>OPNsense 24.7</target>
+    <category>security</category>
+    <requirements>
+        <OPNsense>24.7</OPNsense>
+    </requirements>
+    <logs>
+        <file>/var/log/ofme-agent.log</file>
+    </logs>
+    <services>
+        <service>
+            <name>os_fleet_agent</name>
+            <description>OFME Fleet Agent</description>
+        </service>
+    </services>
+</plugin>

@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ofme.fullname" . }}-beat
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ofme.labels" . | nindent 4 }}
+    app.kubernetes.io/component: beat
+spec:
+  replicas: {{ .Values.beat.replicaCount }}
+  revisionHistoryLimit: 3
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "ofme.selectorLabels" (list . "beat") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ofme.selectorLabels" (list . "beat") | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "ofme.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: beat
+          image: {{ include "ofme.image" (list . "api") }}
+          imagePullPolicy: {{ .Values.image.api.pullPolicy }}
+          command:
+            - celery
+            - -A
+            - app.workers.celery_app:celery_app
+            - beat
+            - --loglevel=INFO
+            - --schedule=/var/lib/ofme/celerybeat-schedule
+          envFrom:
+            - configMapRef:
+                name: {{ include "ofme.fullname" . }}-config
+          env:
+            - name: WAIT_FOR_DB
+              value: "false"
+            - name: RUN_MIGRATIONS
+              value: "false"
+            {{- include "ofme.secretEnv" . | nindent 12 }}
+          volumeMounts:
+            - name: schedule
+              mountPath: /var/lib/ofme
+            - name: tmp
+              mountPath: /tmp
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "test -f /var/lib/ofme/celerybeat-schedule"]
+            initialDelaySeconds: 60
+            periodSeconds: 60
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.beat.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+      volumes:
+        - name: schedule
+          persistentVolumeClaim:
+            claimName: {{ include "ofme.fullname" . }}-beat
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+      {{- with .Values.beat.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.beat.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.beat.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "ofme.fullname" . }}-beat
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ofme.labels" . | nindent 4 }}
+    app.kubernetes.io/component: beat
+spec:
+  accessModes: ["ReadWriteOnce"]
+  {{- if .Values.beat.storageClassName }}
+  storageClassName: {{ .Values.beat.storageClassName }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.beat.storage }}

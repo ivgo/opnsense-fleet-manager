@@ -1,0 +1,323 @@
+# =============================================================================
+# OPNsense Fleet Manager Enterprise - full local/small-production stack
+#
+#   cp .env.example .env && docker compose up -d --build
+#
+# Services: PostgreSQL, Redis, MinIO, API, Celery worker, Celery beat, SPA,
+#           Prometheus, Grafana, Loki, Promtail, OpenTelemetry collector.
+# =============================================================================
+
+name: ofme
+
+x-backend: &backend
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+  image: ofme/api:${OFME_IMAGE_TAG:-1.0.0}
+  env_file:
+    - .env
+  environment:
+    ENVIRONMENT: ${ENVIRONMENT:-development}
+    DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://ofme:ofme@postgres:5432/ofme}
+    REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/1}
+    CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/2}
+    S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
+    PKI_CA_CERT_PATH: ${PKI_CA_CERT_PATH:-/etc/ofme/pki/ca.crt}
+    PKI_CA_KEY_PATH: ${PKI_CA_KEY_PATH:-/etc/ofme/pki/ca.key}
+    OTEL_ENABLED: ${OTEL_ENABLED:-false}
+    OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+    GRPC_ENABLED: ${GRPC_ENABLED:-false}
+    GRPC_BIND: ${GRPC_BIND:-0.0.0.0:50051}
+    GRPC_SERVICE_TOKEN: ${GRPC_SERVICE_TOKEN:-}
+    GRPC_TLS_CERT_PATH: ${GRPC_TLS_CERT_PATH:-}
+    GRPC_TLS_KEY_PATH: ${GRPC_TLS_KEY_PATH:-}
+  volumes:
+    - ofme-pki:/etc/ofme/pki
+    - ofme-logs:/var/log/ofme
+    - ofme-git:/tmp/ofme-git
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    minio:
+      condition: service_started
+  restart: unless-stopped
+  networks: [ofme]
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ofme}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ofme}
+      POSTGRES_DB: ${POSTGRES_DB:-ofme}
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ofme-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ofme} -d ${POSTGRES_DB:-ofme}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+    networks: [ofme]
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - ofme-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    networks: [ofme]
+
+  minio:
+    # MinIO no longer publishes images on Docker Hub and quay.io refuses
+    # anonymous pulls since September 2026. Chainguard publishes an up-to-date,
+    # non-root (UID 65532) build of the same server; it is distroless, so it has
+    # no shell and therefore no in-container healthcheck. Bucket creation and
+    # versioning are handled by the API on startup (ObjectStorage.ensure_buckets).
+    image: cgr.dev/chainguard/minio:latest
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-ofme-minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-ofme-minio-password}
+      MINIO_BROWSER_REDIRECT_URL: http://localhost:${MINIO_CONSOLE_PORT:-9001}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - ofme-minio:/data
+    restart: unless-stopped
+    networks: [ofme]
+
+  ofme-api:
+    <<: *backend
+    container_name: ofme-api
+    command:
+      - python
+      - -m
+      - uvicorn
+      - app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --workers
+      - "1"
+      - --proxy-headers
+      - --forwarded-allow-ips
+      - "*"
+      - --no-server-header
+    ports:
+      - "${API_PORT:-8000}:8000"
+      # gRPC facade. Nothing listens here unless GRPC_ENABLED=true, and the
+      # process must stay single-worker because one listener per container.
+      - "${GRPC_PORT:-50051}:50051"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/live', timeout=4).status == 200 else 1)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+  ofme-worker:
+    <<: *backend
+    container_name: ofme-worker
+    command:
+      - celery
+      - -A
+      - app.workers.celery_app:celery_app
+      - worker
+      - --loglevel=INFO
+      - --concurrency=4
+      - --queues=ofme
+      - --hostname=worker@%h
+    environment:
+      WAIT_FOR_DB: "false"
+      RUN_MIGRATIONS: "false"
+      OTEL_SERVICE_NAME: ofme-worker
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A app.workers.celery_app:celery_app inspect ping -d worker@$$(hostname) || exit 1"]
+      interval: 60s
+      timeout: 20s
+      retries: 3
+      start_period: 60s
+
+  ofme-beat:
+    <<: *backend
+    container_name: ofme-beat
+    command:
+      - celery
+      - -A
+      - app.workers.celery_app:celery_app
+      - beat
+      - --loglevel=INFO
+      - --schedule=/var/lib/ofme/celerybeat-schedule
+    environment:
+      WAIT_FOR_DB: "false"
+      RUN_MIGRATIONS: "false"
+    volumes:
+      - ofme-beat:/var/lib/ofme
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /var/lib/ofme/celerybeat-schedule"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  ofme-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-}
+        VITE_WS_BASE_URL: ${VITE_WS_BASE_URL:-}
+    image: ofme/frontend:${OFME_IMAGE_TAG:-1.0.0}
+    container_name: ofme-frontend
+    ports:
+      - "${FRONTEND_PORT:-8080}:8080"
+    depends_on:
+      ofme-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 4s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks: [ofme]
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+      - --web.external-url=http://localhost:${PROMETHEUS_PORT:-9090}
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts:/etc/prometheus/alerts:ro
+      - ofme-prometheus:/prometheus
+    restart: unless-stopped
+    networks: [ofme]
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SERVER_ROOT_URL: http://localhost:${GRAFANA_PORT:-3000}
+      GF_INSTALL_PLUGINS: ""
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ofme-grafana:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+    restart: unless-stopped
+    networks: [ofme]
+
+  loki:
+    image: grafana/loki:3.3.2
+    command: ["-config.file=/etc/loki/loki-config.yml"]
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/loki-config.yml:ro
+      - ofme-loki:/loki
+    restart: unless-stopped
+    networks: [ofme]
+
+  promtail:
+    image: grafana/promtail:3.3.2
+    command: ["-config.file=/etc/promtail/promtail-config.yml"]
+    volumes:
+      - ./monitoring/loki/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ofme-logs:/var/log/ofme:ro
+    depends_on:
+      - loki
+    restart: unless-stopped
+    networks: [ofme]
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.116.1
+    command: ["--config=/etc/otelcol/config.yml"]
+    volumes:
+      - ./monitoring/otel/otel-collector-config.yml:/etc/otelcol/config.yml:ro
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "9464:9464"
+    restart: unless-stopped
+    networks: [ofme]
+
+  # ----------------------------------------------------------------- test agent
+  # Minimal stand-in for the real os-fleet-agent plugin. It speaks the same
+  # HTTP contract (backend/app/api/v1/endpoints/agent.py) so the enrollment,
+  # heartbeat, config and command-pull paths can be exercised end-to-end.
+  #
+  # It needs a one-time ENROLLMENT_TOKEN, so it lives in the "testing" profile:
+  # a plain `docker compose up -d --wait` must not fail because a credential is
+  # unset. Opt in explicitly:
+  #   docker compose --profile testing build ofme-test-agent
+  #   docker compose --profile testing up -d ofme-test-agent
+  ofme-test-agent:
+    profiles: ["testing"]
+    build:
+      context: ./tests/agent
+      dockerfile: Dockerfile
+    image: ofme/test-agent:${OFME_IMAGE_TAG:-1.0.0}
+    container_name: ofme-test-agent
+    environment:
+      OFME_BASE_URL: ${OFME_BASE_URL:-http://ofme-api:8000}
+      ENROLLMENT_TOKEN: ${ENROLLMENT_TOKEN:-}
+      SERIAL: ${TEST_AGENT_SERIAL:-OFME-TEST-001}
+      INTERVAL: ${TEST_AGENT_INTERVAL:-60}
+    depends_on:
+      ofme-api:
+        condition: service_healthy
+    restart: "no"
+    networks: [ofme]
+
+volumes:
+  ofme-postgres:
+  ofme-redis:
+  ofme-minio:
+  ofme-pki:
+  ofme-logs:
+  ofme-git:
+  ofme-beat:
+  ofme-prometheus:
+  ofme-grafana:
+  ofme-loki:
+
+networks:
+  ofme:
+    driver: bridge

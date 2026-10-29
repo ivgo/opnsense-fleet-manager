@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ofme.fullname" . }}-worker
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ofme.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  {{- if not .Values.worker.autoscaling.enabled }}
+  replicas: {{ .Values.worker.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      {{- include "ofme.selectorLabels" (list . "worker") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ofme.selectorLabels" (list . "worker") | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.worker.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "ofme.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 180
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: worker
+          image: {{ include "ofme.image" (list . "api") }}
+          imagePullPolicy: {{ .Values.image.api.pullPolicy }}
+          command:
+            - celery
+            - -A
+            - app.workers.celery_app:celery_app
+            - worker
+            - --loglevel=INFO
+            - --concurrency={{ .Values.worker.concurrency }}
+            - --queues=ofme
+            - --hostname=worker@%h
+            - --max-tasks-per-child={{ .Values.worker.maxTasksPerChild }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "ofme.fullname" . }}-config
+          env:
+            - name: WAIT_FOR_DB
+              value: "false"
+            - name: RUN_MIGRATIONS
+              value: "false"
+            - name: OTEL_SERVICE_NAME
+              value: ofme-worker
+            {{- include "ofme.secretEnv" . | nindent 12 }}
+            {{- with .Values.worker.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: pki
+              mountPath: /etc/ofme/pki
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - celery -A app.workers.celery_app:celery_app inspect ping -d worker@$(hostname) | grep -q pong
+            initialDelaySeconds: 60
+            periodSeconds: 60
+            timeoutSeconds: 25
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - celery -A app.workers.celery_app:celery_app inspect ping -d worker@$(hostname) | grep -q pong
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 25
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+      volumes:
+        - name: pki
+          secret:
+            secretName: {{ .Values.pki.existingSecret }}
+            defaultMode: 0400
+        - name: tmp
+          emptyDir:
+            sizeLimit: 1Gi
+      {{- with .Values.worker.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

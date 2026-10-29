@@ -1,0 +1,10 @@
+OFME Fleet Agent connects an OPNsense firewall to OPNsense Fleet Manager
+Enterprise (OFME).
+
+The agent enrolls the appliance using a one-time enrollment token and an
+X.509 certificate signed by the OFME device CA. Afterwards it authenticates
+every request with mutual TLS, publishes telemetry every heartbeat, polls
+for operational commands, renews its certificate before expiry and can
+apply centrally managed aliases and firewall policy.
+
+WWW: https://github.com/saarlor-computec/ofme

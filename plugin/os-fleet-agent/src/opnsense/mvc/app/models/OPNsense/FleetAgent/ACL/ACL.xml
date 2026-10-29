@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<acl>
+    <page-services-fleetagent>
+        <name>WebCfg - Services: OFME Fleet Agent</name>
+        <descr>Access the OFME Fleet Agent configuration, status and log pages.</descr>
+        <patterns>
+            <pattern>ui/fleetagent*</pattern>
+            <pattern>api/fleetagent/settings/get</pattern>
+            <pattern>api/fleetagent/settings/set</pattern>
+            <pattern>api/fleetagent/settings/status</pattern>
+            <pattern>api/fleetagent/settings/importCA</pattern>
+            <pattern>api/fleetagent/agent/status</pattern>
+            <pattern>api/fleetagent/agent/log</pattern>
+            <pattern>api/fleetagent/agent/diagnostics</pattern>
+        </patterns>
+    </page-services-fleetagent>
+    <page-services-fleetagent-actions>
+        <name>WebCfg - Services: OFME Fleet Agent (operations)</name>
+        <descr>Enroll, renew, synchronise, restart and reset the OFME Fleet Agent.</descr>
+        <patterns>
+            <pattern>api/fleetagent/agent/enroll</pattern>
+            <pattern>api/fleetagent/agent/renew</pattern>
+            <pattern>api/fleetagent/agent/sync</pattern>
+            <pattern>api/fleetagent/agent/preview</pattern>
+            <pattern>api/fleetagent/agent/command</pattern>
+            <pattern>api/fleetagent/agent/service</pattern>
+            <pattern>api/fleetagent/agent/reset</pattern>
+            <pattern>api/fleetagent/agent/test</pattern>
+        </patterns>
+    </page-services-fleetagent-actions>
+</acl>

@@ -1,0 +1,23 @@
+apiVersion: v2
+name: ofme
+description: OPNsense Fleet Manager Enterprise - API, Celery workers, scheduler and web console
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+kubeVersion: ">=1.27.0-0"
+icon: https://raw.githubusercontent.com/ofme/ofme/main/frontend/public/favicon.svg
+keywords:
+  - opnsense
+  - firewall
+  - fleet-management
+  - gitops
+  - sdwan
+home: https://github.com/ofme/ofme
+sources:
+  - https://github.com/ofme/ofme
+maintainers:
+  - name: OFME Platform Team
+    email: platform@ofme.local
+annotations:
+  category: Infrastructure
+  licenses: LicenseRef-OFME-Enterprise
