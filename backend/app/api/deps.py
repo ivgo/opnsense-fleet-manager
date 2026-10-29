@@ -133,9 +133,13 @@ async def get_principal(
     session: SessionDep,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> Principal:
-    if credentials is None or not credentials.credentials:
+    # Support both Authorization header and HttpOnly cookies
+    token = credentials.credentials if credentials else None
+    if not token:
+        token = request.cookies.get("ofme_access_token")
+    if not token:
         raise AuthenticationError("Authentication required")
-    principal = await principal_from_token(session, credentials.credentials)
+    principal = await principal_from_token(session, token)
     request.state.principal = principal
     return principal
 

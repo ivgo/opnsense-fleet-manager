@@ -85,8 +85,10 @@ export function toApiError(error: unknown): ApiError {
 }
 
 function applyAuthHeaders(config: InternalAxiosRequestConfig): void {
+  // With HttpOnly cookies, the browser automatically sends them with same-origin requests.
+  // We still set the Authorization header for API keys and explicit token usage.
   const token = getAccessToken();
-  if (token) config.headers.set("Authorization", `Bearer ${token}`);
+  if (token && token !== "cookie") config.headers.set("Authorization", `Bearer ${token}`);
   const tenantId = getTenantId();
   if (tenantId) config.headers.set("X-Tenant-Id", tenantId);
 }
@@ -95,6 +97,7 @@ export const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 60_000,
   headers: { Accept: "application/json", "Content-Type": "application/json" },
+  withCredentials: true, // Required for HttpOnly cookies
 });
 
 api.interceptors.request.use((config) => {
@@ -105,22 +108,23 @@ api.interceptors.request.use((config) => {
 let refreshPromise: Promise<string> | null = null;
 
 async function refreshAccessToken(): Promise<string> {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) throw new ApiError("No refresh token available", { status: 401, code: "no_refresh_token" });
-
+  // With HttpOnly cookies, the refresh token is sent automatically via cookie.
+  // We don't need to pass it explicitly in the request body.
   if (!refreshPromise) {
     refreshPromise = axios
       .post<LoginResponse>(
         `${API_BASE_URL}${REFRESH_ENDPOINT}`,
-        { refresh_token: refreshToken },
-        { timeout: 30_000, headers: { Accept: "application/json", "Content-Type": "application/json" } },
+        {}, // Refresh token comes from cookie
+        { timeout: 30_000, withCredentials: true, headers: { Accept: "application/json", "Content-Type": "application/json" } },
       )
       .then((response) => {
         const pair = response.data;
         if (pair.mfa_required) {
           throw new ApiError("MFA is required; sign in again", { status: 401, code: "mfa_required" });
         }
-        setTokens(pair.access_token, pair.refresh_token, pair.expires_in);
+        if (pair.access_token && pair.refresh_token) {
+          setTokens(pair.access_token, pair.refresh_token, pair.expires_in);
+        }
         return pair.access_token;
       })
       .finally(() => {

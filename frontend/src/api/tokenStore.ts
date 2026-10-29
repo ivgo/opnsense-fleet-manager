@@ -1,15 +1,13 @@
 /**
  * Persistence for credentials and the tenant context.
  *
- * Tokens live in localStorage because the console is a pure SPA served from the
- * same origin as the API. The store deliberately exposes no React dependency so
- * that the axios interceptors can use it outside of components.
+ * Tokens are now stored in HttpOnly Secure SameSite cookies set by the backend.
+ * This module provides in-memory caching for token expiry tracking and tenant context.
+ * The actual tokens are read from cookies by axios interceptors automatically.
  */
 
-const ACCESS_KEY = "ofme.access_token";
-const REFRESH_KEY = "ofme.refresh_token";
-const EXPIRES_KEY = "ofme.access_expires_at";
 const TENANT_KEY = "ofme.tenant_id";
+const EXPIRES_KEY = "ofme.access_expires_at";
 
 export interface StoredTokens {
   accessToken: string;
@@ -66,36 +64,39 @@ export function decodeJwtExpiry(token: string): number {
 }
 
 export function setTokens(accessToken: string, refreshToken: string, expiresInSeconds = 0): void {
+  // Tokens are now stored in HttpOnly cookies set by the backend
+  // We only store the expiry in memory/localStorage for client-side logic
   const expiresAt = expiresInSeconds > 0 ? Date.now() + expiresInSeconds * 1000 : decodeJwtExpiry(accessToken);
   memoryTokens = { accessToken, refreshToken, expiresAt };
-  write(ACCESS_KEY, accessToken);
-  write(REFRESH_KEY, refreshToken);
   write(EXPIRES_KEY, String(expiresAt));
 }
 
 export function getTokens(): StoredTokens | null {
   if (memoryTokens) return memoryTokens;
-  const accessToken = read(ACCESS_KEY);
-  const refreshToken = read(REFRESH_KEY);
-  if (!accessToken || !refreshToken) return null;
-  const expiresAt = Number(read(EXPIRES_KEY) ?? "0") || decodeJwtExpiry(accessToken);
-  memoryTokens = { accessToken, refreshToken, expiresAt };
+  // For cookie-based auth, we don't have direct access to tokens from JS
+  // Return a placeholder with expiry info - actual tokens are sent via cookies
+  const expiresAt = Number(read(EXPIRES_KEY) ?? "0");
+  if (!expiresAt) return null;
+  memoryTokens = { accessToken: "cookie", refreshToken: "cookie", expiresAt };
   return memoryTokens;
 }
 
 export function getAccessToken(): string | null {
-  return getTokens()?.accessToken ?? null;
+  // Returns "cookie" to indicate cookie-based auth, or null if not authenticated
+  const tokens = getTokens();
+  return tokens ? "cookie" : null;
 }
 
 export function getRefreshToken(): string | null {
-  return getTokens()?.refreshToken ?? null;
+  // Returns "cookie" to indicate cookie-based auth, or null if not authenticated
+  const tokens = getTokens();
+  return tokens ? "cookie" : null;
 }
 
 export function clearTokens(): void {
   memoryTokens = null;
-  remove(ACCESS_KEY);
-  remove(REFRESH_KEY);
   remove(EXPIRES_KEY);
+  // Note: Actual cookie clearing happens on backend via /auth/logout
 }
 
 export function accessTokenExpired(leewaySeconds = 30): boolean {

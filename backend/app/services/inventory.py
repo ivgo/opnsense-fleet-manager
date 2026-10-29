@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.logging import get_logger
 from app.models.inventory import ClientDevice, ClientSource, ClientStatus
 from app.repositories import UnitOfWork
@@ -187,7 +188,7 @@ class InventoryService:
                     device.api_url,
                     device.api_key,
                     device.api_secret,
-                    verify_tls=False,
+                    verify_tls=settings.OPNsense_VERIFY_TLS,
                 )
                 await client_instance.add_to_alias(self.BLOCKED_ALIAS_NAME, client.mac_address)
                 await client_instance.apply_firewall_rules()
@@ -226,7 +227,7 @@ class InventoryService:
                     device.api_url,
                     device.api_key,
                     device.api_secret,
-                    verify_tls=False,
+                    verify_tls=settings.OPNsense_VERIFY_TLS,
                 )
                 await client_instance.add_to_alias(self.BLOCKED_ALIAS_NAME, client.mac_address)
                 await client_instance.apply_firewall_rules()
@@ -264,7 +265,7 @@ class InventoryService:
                     device.api_url,
                     device.api_key,
                     device.api_secret,
-                    verify_tls=False,
+                    verify_tls=settings.OPNsense_VERIFY_TLS,
                 )
                 await client_instance.remove_from_alias(self.BLOCKED_ALIAS_NAME, client.mac_address)
                 await client_instance.apply_firewall_rules()

@@ -89,9 +89,12 @@ def _number(value: Any) -> float | None:
 class OpnsenseClient:
     def __init__(self, credentials: OpnsenseCredentials) -> None:
         self.credentials = credentials
-        token = base64.b64encode(f"{credentials.api_key}:{credentials.api_secret}".encode()).decode("ascii")
+        # Use OPNsense native API key header authentication (preferred over Basic Auth)
+        # See: https://docs.opnsense.org/development/api.html#authentication
         self._headers = {
-            "Authorization": f"Basic {token}",
+            "Authorization": f"Bearer {credentials.api_key}",
+            "X-OPNsense-API-Key": credentials.api_key,
+            "X-OPNsense-API-Secret": credentials.api_secret,
             "Accept": "application/json",
             "Content-Type": "application/json",
             "User-Agent": "OFME/1.0",

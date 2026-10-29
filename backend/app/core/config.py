@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     TRUSTED_PROXY_IPS: str = ""
 
     # ---------------------------------------------------------------- security
-    SECRET_KEY: str = Field(default="dev-only-insecure-secret-key-change-me-please-32b")
+    SECRET_KEY: str = Field(..., min_length=32)
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -172,8 +172,8 @@ class Settings(BaseSettings):
     @classmethod
     def _secret_strength(cls, value: str, info) -> str:
         env = info.data.get("ENVIRONMENT", "development")
-        if env == "production" and len(value) < 32:
-            raise ValueError("SECRET_KEY must be at least 32 characters in production")
+        if env == "production" and len(value) < 64:
+            raise ValueError("SECRET_KEY must be at least 64 characters in production")
         return value
 
     @property

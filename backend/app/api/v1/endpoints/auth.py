@@ -71,7 +71,36 @@ def _current_user(outcome: LoginOutcome) -> CurrentUser | None:
     )
 
 
-def _response(outcome: LoginOutcome) -> LoginResponse:
+def _set_auth_cookies(response: Response, access_token: str, refresh_token: str, expires_in: int) -> None:
+    """Set HttpOnly Secure SameSite cookies for tokens."""
+    cookie_settings = {
+        "httponly": True,
+        "secure": settings.ENVIRONMENT == "production",
+        "samesite": "lax",  # Use lax for cross-site navigation during login
+        "path": "/",
+        "max_age": expires_in,
+    }
+    response.set_cookie(key="ofme_access_token", value=access_token, **cookie_settings)
+    # Refresh token with longer expiry
+    refresh_settings = {**cookie_settings, "max_age": settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400}
+    response.set_cookie(key="ofme_refresh_token", value=refresh_token, **refresh_settings)
+
+
+def _clear_auth_cookies(response: Response) -> None:
+    """Clear auth cookies on logout."""
+    cookie_settings = {
+        "httponly": True,
+        "secure": settings.ENVIRONMENT == "production",
+        "samesite": "lax",
+        "path": "/",
+        "max_age": 0,
+        "expires": 0,
+    }
+    response.delete_cookie(key="ofme_access_token", **cookie_settings)
+    response.delete_cookie(key="ofme_refresh_token", **cookie_settings)
+
+
+def _response(outcome: LoginOutcome, response: Response) -> LoginResponse:
     if outcome.challenge is not None:
         return LoginResponse(
             mfa_required=True,
@@ -79,6 +108,7 @@ def _response(outcome: LoginOutcome) -> LoginResponse:
             methods=outcome.challenge.methods,
         )
     assert outcome.tokens is not None
+    _set_auth_cookies(response, outcome.tokens.access_token, outcome.tokens.refresh_token, outcome.tokens.expires_in)
     return LoginResponse(
         access_token=outcome.tokens.access_token,
         refresh_token=outcome.tokens.refresh_token,
@@ -91,6 +121,7 @@ def _response(outcome: LoginOutcome) -> LoginResponse:
 async def login(
     payload: LoginRequest,
     request: Request,
+    response: Response,
     session: SessionDep,
     ip: ClientIP,
 ) -> LoginResponse:
@@ -103,13 +134,14 @@ async def login(
         ip=ip,
         user_agent=await get_user_agent(request),
     )
-    return _response(outcome)
+    return _response(outcome, response)
 
 
 @router.post("/ldap/login", response_model=LoginResponse, summary="LDAP / Active Directory login")
 async def ldap_login(
     payload: LdapLoginRequest,
     request: Request,
+    response: Response,
     session: SessionDep,
     ip: ClientIP,
 ) -> LoginResponse:
@@ -120,13 +152,14 @@ async def ldap_login(
         ip=ip,
         user_agent=await get_user_agent(request),
     )
-    return _response(outcome)
+    return _response(outcome, response)
 
 
 @router.post("/mfa/verify", response_model=LoginResponse, summary="Complete an MFA challenge")
 async def verify_mfa(
     payload: MfaVerifyRequest,
     request: Request,
+    response: Response,
     session: SessionDep,
     ip: ClientIP,
     challenge_token: str = "",
@@ -137,14 +170,30 @@ async def verify_mfa(
     outcome = await AuthService(session).complete_mfa(
         challenge_token=token, code=payload.code, ip=ip, user_agent=await get_user_agent(request)
     )
-    return _response(outcome)
+    return _response(outcome, response)
 
 
 @router.post("/refresh", response_model=TokenPair, summary="Rotate refresh token")
-async def refresh(payload: RefreshRequest, request: Request, session: SessionDep, ip: ClientIP) -> TokenPair:
-    return await AuthService(session).refresh(
-        payload.refresh_token, ip=ip, user_agent=await get_user_agent(request)
+async def refresh(
+    payload: RefreshRequest,
+    request: Request,
+    response: Response,
+    session: SessionDep,
+    ip: ClientIP,
+) -> TokenPair:
+    # Try to get refresh token from cookie if not in body
+    refresh_token = payload.refresh_token
+    if not refresh_token:
+        refresh_token = request.cookies.get("ofme_refresh_token")
+    if not refresh_token:
+        raise AuthenticationError("Missing refresh token")
+
+    result = await AuthService(session).refresh(
+        refresh_token, ip=ip, user_agent=await get_user_agent(request)
     )
+    # Set new cookies with rotated tokens
+    _set_auth_cookies(response, result.access_token, result.refresh_token, result.expires_in)
+    return result
 
 
 @router.post("/logout", response_model=Message, summary="Revoke session(s)")
@@ -152,6 +201,7 @@ async def logout(
     payload: LogoutRequest,
     principal: CurrentPrincipal,
     session: SessionDep,
+    response: Response,
 ) -> Message:
     if principal.user_id is None:
         raise AuthenticationError("API keys cannot call logout")
@@ -160,6 +210,7 @@ async def logout(
         refresh_token=payload.refresh_token,
         all_sessions=payload.all_sessions,
     )
+    _clear_auth_cookies(response)
     return Message(message=f"Revoked {count} session(s)")
 
 
@@ -374,12 +425,13 @@ async def saml_authorize(tenant: str | None = None) -> SamlAuthorizeResponse:
 @router.post("/saml/acs", summary="SAML assertion consumer service", include_in_schema=False)
 async def saml_acs(
     request: Request,
+    response: Response,
     session: SessionDep,
     ip: ClientIP,
     saml_response: str = Form(..., alias="SAMLResponse"),
     relay_state: str = Form("", alias="RelayState"),
 ) -> RedirectResponse:
-    """Consume an IdP response and hand tokens to the SPA via the URL fragment."""
+    """Consume an IdP response and set HttpOnly cookies, then redirect to frontend."""
     target = settings.FRONTEND_URL.rstrip("/") + "/saml/callback"
     try:
         claims = decode_token(relay_state, expected_type="saml_state") if relay_state else {}
@@ -398,12 +450,8 @@ async def saml_acs(
             f"{target}#error={quote(message or 'SAML login failed')}", status_code=303
         )
     assert outcome.tokens is not None
-    fragment = (
-        f"access_token={outcome.tokens.access_token}"
-        f"&refresh_token={outcome.tokens.refresh_token}"
-        f"&expires_in={outcome.tokens.expires_in}"
-    )
-    return RedirectResponse(f"{target}#{fragment}", status_code=303)
+    _set_auth_cookies(response, outcome.tokens.access_token, outcome.tokens.refresh_token, outcome.tokens.expires_in)
+    return RedirectResponse(target, status_code=303)
 
 
 @router.get("/saml/metadata", summary="SAML service provider metadata", include_in_schema=False)

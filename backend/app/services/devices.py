@@ -499,7 +499,7 @@ class DeviceDiscoveryService:
     async def _probe(self, host: str, port: int, timeout: float, managed: bool) -> DiscoveryCandidate | None:
         url = f"https://{host}:{port}/api/core/firmware/status"
         try:
-            async with httpx.AsyncClient(verify=False, timeout=timeout) as client:  # noqa: S501
+            async with httpx.AsyncClient(verify=True, timeout=timeout) as client:
                 response = await client.get(url)
         except httpx.HTTPError:
             return None
