@@ -165,11 +165,14 @@ class Settings(BaseSettings):
     # ---------------------------------------------------------------- grpc
     # Internal read-only inventory API. Off by default: no listener is opened
     # until both GRPC_ENABLED and GRPC_SERVICE_TOKEN are set.
+    # For mTLS: set GRPC_TLS_CERT_PATH, GRPC_TLS_KEY_PATH, and GRPC_TLS_CA_CERT_PATH.
     GRPC_ENABLED: bool = False
     GRPC_BIND: str = "0.0.0.0:50051"
     GRPC_SERVICE_TOKEN: str = ""
     GRPC_TLS_CERT_PATH: str = ""
     GRPC_TLS_KEY_PATH: str = ""
+    GRPC_TLS_CA_CERT_PATH: str = ""  # CA cert for client certificate verification (mTLS)
+    GRPC_REQUIRE_CLIENT_CERT: bool = False  # Require client certificate for mTLS
 
     @field_validator("SECRET_KEY")
     @classmethod

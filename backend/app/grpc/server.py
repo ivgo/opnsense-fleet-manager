@@ -221,7 +221,14 @@ class FleetRegistryService(fleet_pb2_grpc.FleetRegistryServicer):
 
 
 async def start_server() -> grpc.aio.Server | None:
-    """Start the gRPC server; returns ``None`` when the feature is disabled."""
+    """Start the gRPC server; returns ``None`` when the feature is disabled.
+
+    TLS Configuration:
+    - Server TLS: GRPC_TLS_CERT_PATH + GRPC_TLS_KEY_PATH
+    - Client cert verification (mTLS): GRPC_TLS_CA_CERT_PATH + GRPC_REQUIRE_CLIENT_CERT
+    - When GRPC_REQUIRE_CLIENT_CERT=true, clients must present a valid certificate
+      signed by the CA specified in GRPC_TLS_CA_CERT_PATH.
+    """
 
     if not settings.GRPC_ENABLED:
         return None
@@ -237,12 +244,39 @@ async def start_server() -> grpc.aio.Server | None:
             asyncio.to_thread(Path(settings.GRPC_TLS_CERT_PATH).read_bytes),
             asyncio.to_thread(Path(settings.GRPC_TLS_KEY_PATH).read_bytes),
         )
-        credentials = grpc.ssl_server_credentials(((private_key, certificate),))
+
+        if settings.GRPC_TLS_CA_CERT_PATH and settings.GRPC_REQUIRE_CLIENT_CERT:
+            # mTLS: require client certificates signed by specified CA
+            ca_cert = await asyncio.to_thread(Path(settings.GRPC_TLS_CA_CERT_PATH).read_bytes)
+            credentials = grpc.ssl_server_credentials(
+                ((private_key, certificate),),
+                root_certificates=ca_cert,
+                require_client_auth=True,
+            )
+            scheme = "mtls"
+            log.info("grpc.tls_configured", mode="mtls", client_auth="required")
+        elif settings.GRPC_TLS_CA_CERT_PATH:
+            # Optional client cert verification
+            ca_cert = await asyncio.to_thread(Path(settings.GRPC_TLS_CA_CERT_PATH).read_bytes)
+            credentials = grpc.ssl_server_credentials(
+                ((private_key, certificate),),
+                root_certificates=ca_cert,
+                require_client_auth=False,
+            )
+            scheme = "tls"
+            log.info("grpc.tls_configured", mode="tls", client_auth="optional")
+        else:
+            # Server TLS only, no client cert verification
+            credentials = grpc.ssl_server_credentials(((private_key, certificate),))
+            scheme = "tls"
+            log.info("grpc.tls_configured", mode="tls", client_auth="none")
+
         server.add_secure_port(settings.GRPC_BIND, credentials)
-        scheme = "tls"
     else:
         server.add_insecure_port(settings.GRPC_BIND)
         scheme = "plaintext"
+        if settings.GRPC_REQUIRE_CLIENT_CERT:
+            log.warning("grpc.mtls_ignored", reason="GRPC_TLS_CERT_PATH or GRPC_TLS_KEY_PATH not set")
 
     await server.start()
     log.info("grpc.started", bind=settings.GRPC_BIND, transport=scheme)

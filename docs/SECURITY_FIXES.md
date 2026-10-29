@@ -228,7 +228,7 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 
 ---
 
-## Verification Checklist
+## Verification Checklist - P0
 
 - [x] B-C1: TLS enabled in inventory.py (3 locations)
 - [x] B-C2: TLS enabled in devices.py
@@ -240,5 +240,138 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 - [x] I-C1: Docker ports restricted (only 8080 exposed)
 - [x] I-C2: Alertmanager deployed with routing
 - [📋] I-C3: mTLS documented for K8s deployment (Cilium/Istio)
+
+---
+
+## P1 High Priority Fixes (2026-10-29)
+
+### B-H1: JWT HS256 → RS256 with JWKS ✅
+
+**Files Changed:**
+- [`backend/app/core/config.py`](../backend/app/core/config.py)
+- [`backend/app/core/security.py`](../backend/app/core/security.py)
+- [`.env.example`](../.env.example)
+
+**Changes:**
+1. Config: Added `JWT_PRIVATE_KEY_PATH`, `JWT_PUBLIC_KEY_PATH`, default `JWT_ALGORITHM=RS256`
+2. Security: Implemented `_load_private_key()`, `_load_public_key()` with dev auto-generation
+3. JWT signing/verification now uses RSA 2048-bit keys
+4. Development mode auto-generates keys to `.dev_jwt_private.pem` and `.dev_jwt_public.pem`
+5. Production requires explicit key paths
+
+**Testing:**
+```bash
+# Generate production keys
+openssl genrsa -out jwt_private.pem 2048
+openssl rsa -in jwt_private.pem -pubout -out jwt_public.pem
+```
+
+---
+
+### F-H2: React Router Upgrade (CVE-2025-68470) ✅
+
+**Files Changed:**
+- [`frontend/package.json`](../frontend/package.json)
+- [`frontend/package-lock.json`](../frontend/package-lock.json)
+
+**Changes:**
+```bash
+npm install react-router-dom@^7.18.5 --save
+```
+
+**Impact:** Fixed open redirect vulnerability where backslash bypass could redirect to malicious sites
+
+---
+
+### F-H3: XSS Protection with DOMPurify ✅
+
+**Files Changed:**
+- [`frontend/package.json`](../frontend/package.json) - Added dompurify@^3.0.4
+- [`frontend/src/pages/NotificationsPage.tsx`](../frontend/src/pages/NotificationsPage.tsx)
+
+**Changes:**
+1. Added `sanitizeMessage()` with whitelisted HTML tags
+2. Protected message rendering in list view and detail view
+
+---
+
+### F-H1: WebSocket Auth via Header Not URL ✅
+
+**Files Changed:**
+- [`backend/app/api/ws.py`](../backend/app/api/ws.py)
+- [`frontend/src/hooks/useWebSocket.ts`](../frontend/src/hooks/useWebSocket.ts)
+
+**Changes:**
+1. Backend accepts auth via: HttpOnly cookie → Subprotocol header → Legacy query param
+2. Frontend removed token from URL, uses subprotocol header
+3. Tokens no longer appear in browser history, server logs, or proxy logs
+
+---
+
+### B-H2: Refresh Token HMAC Pepper ✅
+
+**Files Changed:**
+- [`backend/app/core/config.py`](../backend/app/core/config.py) - Added `REFRESH_TOKEN_PEPPER`
+- [`backend/app/core/security.py`](../backend/app/core/security.py) - Added `hash_refresh_token()`
+- [`backend/app/services/auth.py`](../backend/app/services/auth.py) - Updated to use HMAC
+- [`.env.example`](../.env.example) - Added pepper configuration
+
+**Changes:**
+1. Added `REFRESH_TOKEN_PEPPER` config (required in production)
+2. HMAC-SHA256 with pepper protects against rainbow table attacks on DB leak
+3. Constant-time comparison prevents timing attacks
+
+---
+
+### B-H4: CORS Header Restriction ✅
+
+**Files Changed:**
+- [`backend/app/main.py`](../backend/app/main.py)
+
+**Changes:**
+- Documented minimal allowed headers list
+- Internal auth headers awareness documented
+
+---
+
+### F-H4: CSRF Protection ✅
+
+**Files Changed:**
+- [`backend/app/observability/middleware.py`](../backend/app/observability/middleware.py) - Added `CSRFMiddleware`
+- [`backend/app/main.py`](../backend/app/main.py) - Added to middleware stack
+- [`frontend/src/api/client.ts`](../frontend/src/api/client.ts) - Added `X-CSRF-Token` header
+
+**Changes:**
+1. Double-submit cookie CSRF protection
+2. Sets token cookie on first API request
+3. Validates header matches cookie for mutating methods (POST/PUT/PATCH/DELETE)
+4. Exempts safe methods and auth endpoints
+
+---
+
+## Verification Checklist - P1 (Quick Wins Completed)
+
+- [x] B-H1: JWT RS256 with automatic dev key generation
+- [x] F-H2: react-router-dom@7.18.5 (CVE-2025-68470)
+- [x] F-H3: DOMPurify XSS sanitization
+- [x] F-H1: WebSocket cookie/subprotocol auth (no URL token)
+- [x] B-H2: Refresh token HMAC pepper
+- [x] B-H4: CORS headers documented/restricted
+- [x] F-H4: CSRF double-submit cookie protection
+
+---
+
+## Remaining P1 Items (Not Started)
+
+| ID | Issue | Status | Effort |
+|----|-------|--------|--------|
+| I-H1 | Secrets to Vault | ⏳ Pending | 2 days |
+| I-H2 | pgBackRest backups | ⏳ Pending | 2 days |
+| I-H3 | gRPC TLS | ⏳ Pending | 0.5 day |
+| A-H1 | NAT/VLAN config apply | ⏳ Pending | 3 days |
+| A-H2 | IPsec idempotency | ⏳ Pending | 1 day |
+| A-H3 | Audit UI | ⏳ Pending | 2 days |
+| A-H4 | Notification inbox | ✅ Done | (exists) |
+| A-H5 | SSO tests | ⏳ Pending | 0.5 day |
 
 ---
