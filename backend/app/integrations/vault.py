@@ -1,11 +1,15 @@
 """HashiCorp Vault KV v2 secret backend with transparent fallback to AES-GCM envelopes.
 
 Uses hvac (HashiCorp Vault Python client) for production deployments.
+Local backend uses encrypted file storage for self-hosted deployments.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
+import os
+from pathlib import Path
 from typing import Any
 
 import httpx
@@ -17,6 +21,9 @@ log = get_logger("ofme.vault")
 
 # Lazy-loaded hvac client
 _vault_client: Any | None = None
+
+# Local backend storage path
+_LOCAL_SECRET_DIR = Path("/var/lib/ofme/secrets")
 
 
 def _get_settings():
@@ -163,16 +170,54 @@ class VaultSecretBackend(SecretBackend):
 
 
 class LocalSecretBackend(SecretBackend):
-    """AES-256-GCM envelope encryption keyed from SECRET_KEY (default for self-hosting)."""
+    """AES-256-GCM envelope encryption keyed from SECRET_KEY (default for self-hosting).
+
+    Stores secrets as encrypted JSON files in the local filesystem.
+    Each secret path becomes a file with envelope-encrypted values.
+    """
+
+    def __init__(self) -> None:
+        _LOCAL_SECRET_DIR.mkdir(parents=True, exist_ok=True)
+        log.info("vault.local_initialized", path=str(_LOCAL_SECRET_DIR))
+
+    def _secret_path(self, path: str) -> Path:
+        """Convert secret path to filesystem path."""
+        # Sanitize path to prevent directory traversal
+        safe_path = path.strip("/").replace("/", "_").replace("..", "")
+        return _LOCAL_SECRET_DIR / f"{safe_path}.json"
 
     async def put(self, path: str, values: dict[str, str]) -> None:
-        log.debug("vault.local_put", path=path)
+        """Store secret values as encrypted JSON file."""
+        file_path = self._secret_path(path)
+        # Encrypt each value individually
+        encrypted = {key: self.seal(value) for key, value in values.items()}
+        data = json.dumps(encrypted, ensure_ascii=False)
+        # Write atomically
+        temp_path = file_path.with_suffix(".tmp")
+        await asyncio.to_thread(temp_path.write_text, data, encoding="utf-8")
+        await asyncio.to_thread(os.replace, temp_path, file_path)
+        log.debug("vault.local_put", path=path, file=str(file_path))
 
     async def get(self, path: str) -> dict[str, str] | None:
-        return None
+        """Read and decrypt secret values from JSON file."""
+        file_path = self._secret_path(path)
+        if not await asyncio.to_thread(file_path.exists):
+            return None
+        try:
+            data = await asyncio.to_thread(file_path.read_text, encoding="utf-8")
+            encrypted = json.loads(data)
+            # Decrypt each value
+            return {key: self.open(value) for key, value in encrypted.items()}
+        except (json.JSONDecodeError, Exception) as e:
+            log.error("vault.local_get_failed", path=path, error=str(e))
+            return None
 
     async def delete(self, path: str) -> None:
-        return None
+        """Delete secret file."""
+        file_path = self._secret_path(path)
+        if await asyncio.to_thread(file_path.exists):
+            await asyncio.to_thread(file_path.unlink)
+            log.debug("vault.local_delete", path=path)
 
 
 _vault_backend: SecretBackend | None = None

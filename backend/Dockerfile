@@ -95,7 +95,7 @@ COPY --chown=ofme:ofme docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 COPY pgbackrest.conf /etc/pgbackrest/pgbackrest.conf
 
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh \
-    && mkdir -p /etc/ofme/pki /var/log/ofme /tmp/ofme-git /var/lib/ofme \
+    && mkdir -p /etc/ofme/pki /var/log/ofme /tmp/ofme-git /var/lib/ofme /var/lib/ofme/secrets \
     && chown -R ofme:ofme /etc/ofme /var/log/ofme /tmp/ofme-git /var/lib/ofme /app
 
 USER ofme

@@ -30,25 +30,26 @@ describe("tokenStore", () => {
     window.localStorage.clear();
   });
 
-  it("persists and clears the token pair", () => {
+  it("persists and clears the token pair (cookie-based auth)", () => {
     setTokens("access-token", "refresh-token", 3600);
 
-    expect(getAccessToken()).toBe("access-token");
-    expect(getRefreshToken()).toBe("refresh-token");
+    // With cookie-based auth, getAccessToken returns "cookie" to indicate cookie-based session
+    expect(getAccessToken()).toBe("cookie");
+    expect(getRefreshToken()).toBe("cookie");
     expect(getTokens()?.expiresAt).toBeGreaterThan(Date.now());
 
     clearTokens();
     expect(getAccessToken()).toBeNull();
     expect(getRefreshToken()).toBeNull();
-    expect(window.localStorage.getItem("ofme.access_token")).toBeNull();
   });
 
   it("rehydrates tokens from localStorage after the memory cache is dropped", () => {
     setTokens("access-token", "refresh-token", 3600);
     resetStoreForTests();
 
+    // After rehydration, tokens show as "cookie" (placeholder for cookie-based auth)
     expect(getTokens()).toEqual(
-      expect.objectContaining({ accessToken: "access-token", refreshToken: "refresh-token" }),
+      expect.objectContaining({ accessToken: "cookie", refreshToken: "cookie" }),
     );
   });
 

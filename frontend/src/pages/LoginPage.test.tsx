@@ -112,7 +112,8 @@ describe("LoginPage", () => {
     await user.click(screen.getByRole("button", { name: /sign in/i }));
 
     await waitFor(() => expect(store.getState().auth.status).toBe("authenticated"));
-    expect(getAccessToken()).toBe("access-token");
+    // With cookie-based auth, getAccessToken returns "cookie" as a placeholder
+    expect(getAccessToken()).toBe("cookie");
     expect(store.getState().auth.user?.username).toBe("admin");
   });
 

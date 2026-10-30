@@ -15,5 +15,13 @@ chmod -R g+rwX /var/lib/pgbackrest/backup
 chown -R postgres:postgres /var/log/pgbackrest
 chmod -R g+rwX /var/log/pgbackrest
 
+# Fix backup.info and backup.info.copy permissions if they exist and are root-owned
+if [ -f /var/lib/pgbackrest/backup/ofme/backup.info ]; then
+    chown postgres:postgres /var/lib/pgbackrest/backup/ofme/backup.info
+fi
+if [ -f /var/lib/pgbackrest/backup/ofme/backup.info.copy ]; then
+    chown postgres:postgres /var/lib/pgbackrest/backup/ofme/backup.info.copy
+fi
+
 # Call the original postgres entrypoint (waits for PG to be ready)
 exec docker-entrypoint.sh "$@"
