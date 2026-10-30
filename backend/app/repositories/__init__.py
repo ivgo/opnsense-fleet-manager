@@ -47,6 +47,8 @@ from app.repositories.policies import (
     FirewallRuleRepository,
     GitRepositoryRepository,
     InterfaceRepository,
+    IpsecPhase1Repository,
+    IpsecPhase2Repository,
     NatRuleRepository,
     PolicyRepository,
     RouteRepository,
@@ -88,6 +90,8 @@ __all__ = [
     "DhcpScopeRepository",
     "DhcpReservationRepository",
     "DnsRecordRepository",
+    "IpsecPhase1Repository",
+    "IpsecPhase2Repository",
     "GitRepositoryRepository",
     "PolicyRepository",
     "DeploymentRepository",
@@ -154,6 +158,8 @@ class UnitOfWork:
         self.dhcp_scopes = DhcpScopeRepository(session, tenant_id)
         self.dhcp_reservations = DhcpReservationRepository(session, tenant_id)
         self.dns_records = DnsRecordRepository(session, tenant_id)
+        self.ipsec_phase1 = IpsecPhase1Repository(session, tenant_id)
+        self.ipsec_phase2 = IpsecPhase2Repository(session, tenant_id)
 
         self.git_repos = GitRepositoryRepository(session, tenant_id)
         self.policies = PolicyRepository(session, tenant_id)

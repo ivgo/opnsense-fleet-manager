@@ -120,14 +120,20 @@ async function renderUsersPage() {
     preloadedState: {
       auth: {
         user: USER,
-        status: "authenticated",
+        status: "authenticated" as const,
         hydrated: true,
         error: null,
         mfaRequired: false,
         challengeToken: null,
         mfaMethods: [],
       },
-      ui: { toasts: [] },
+      ui: {
+        themeMode: "light" as const,
+        sidebarOpen: true,
+        sidebarCollapsed: false,
+        selectedTenantId: null,
+        toast: { open: false, message: "", severity: "info" as const },
+      },
     },
   });
   const queryClient = new QueryClient({

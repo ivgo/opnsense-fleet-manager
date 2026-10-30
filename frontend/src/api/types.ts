@@ -1428,6 +1428,134 @@ export type DnsRecordUpdate = Partial<
   Pick<DnsRecordPayload, "value" | "ttl" | "priority" | "weight" | "port" | "description" | "enabled">
 >;
 
+/* ------------------------------------------------------------ IPsec */
+
+export type IpsecIkeType = "ikev1" | "ikev2";
+export type IpsecAuthMethod = "pre_shared_key" | "rsa" | "ecdsa" | "x509";
+export type IpsecNatTraversal = "force" | "disable" | "auto";
+export type IpsecMode = "tunnel" | "transport";
+export type IpsecProtocol = "esp" | "ah" | "esp-ah";
+
+export interface IpsecPhase1 {
+  id: string;
+  created_at: ISODate;
+  updated_at: ISODate;
+  device_id: string;
+  name: string;
+  description: string | null;
+  enabled: boolean;
+  iketype: IpsecIkeType;
+  interface: string;
+  remote_gateway: string;
+  local_gateway: string | null;
+  authentication_method: IpsecAuthMethod;
+  my_identifier: string | null;
+  peer_identifier: string | null;
+  encryption: string[];
+  hash: string[];
+  dh_group: string;
+  lifetime: number;
+  dpd_delay: number;
+  dpd_maxfail: number;
+  nat_traversal: IpsecNatTraversal;
+}
+
+export interface IpsecPhase1Payload {
+  device_id: string;
+  name: string;
+  description?: string | null;
+  enabled?: boolean;
+  iketype?: IpsecIkeType;
+  interface?: string;
+  remote_gateway: string;
+  local_gateway?: string | null;
+  authentication_method?: IpsecAuthMethod;
+  pre_shared_key?: string | null;
+  my_identifier?: string | null;
+  peer_identifier?: string | null;
+  encryption?: string[];
+  hash?: string[];
+  dh_group?: string;
+  lifetime?: number;
+  dpd_delay?: number;
+  dpd_maxfail?: number;
+  nat_traversal?: IpsecNatTraversal;
+}
+
+export type IpsecPhase1Update = Partial<
+  Pick<
+    IpsecPhase1Payload,
+    | "description"
+    | "enabled"
+    | "iketype"
+    | "interface"
+    | "remote_gateway"
+    | "local_gateway"
+    | "authentication_method"
+    | "pre_shared_key"
+    | "my_identifier"
+    | "peer_identifier"
+    | "encryption"
+    | "hash"
+    | "dh_group"
+    | "lifetime"
+    | "dpd_delay"
+    | "dpd_maxfail"
+    | "nat_traversal"
+  >
+>;
+
+export interface IpsecPhase2 {
+  id: string;
+  created_at: ISODate;
+  updated_at: ISODate;
+  device_id: string;
+  phase1_id: string;
+  name: string;
+  description: string | null;
+  enabled: boolean;
+  mode: IpsecMode;
+  protocol: IpsecProtocol;
+  local_net: string;
+  remote_net: string;
+  encryption: string[];
+  hash: string[];
+  pfs_group: string;
+  lifetime: number;
+}
+
+export interface IpsecPhase2Payload {
+  device_id: string;
+  phase1_id: string;
+  name: string;
+  description?: string | null;
+  enabled?: boolean;
+  mode?: IpsecMode;
+  protocol?: IpsecProtocol;
+  local_net: string;
+  remote_net: string;
+  encryption?: string[];
+  hash?: string[];
+  pfs_group?: string;
+  lifetime?: number;
+}
+
+export type IpsecPhase2Update = Partial<
+  Pick<
+    IpsecPhase2Payload,
+    | "description"
+    | "enabled"
+    | "mode"
+    | "protocol"
+    | "local_net"
+    | "remote_net"
+    | "encryption"
+    | "hash"
+    | "pfs_group"
+    | "lifetime"
+  >
+>;
+
 export interface Certificate {
   id: string;
   created_at: ISODate;

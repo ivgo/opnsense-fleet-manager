@@ -96,7 +96,6 @@ const MOCK_READINESS = {
 const MOCK_RULES: AlertRule[] = [
   {
     id: "rule-1",
-    tenant_id: "tenant-1",
     name: "High CPU",
     metric: "cpu",
     operator: ">",
@@ -111,7 +110,6 @@ const MOCK_RULES: AlertRule[] = [
   },
   {
     id: "rule-2",
-    tenant_id: "tenant-1",
     name: "Memory Critical",
     metric: "memory",
     operator: ">",
@@ -155,6 +153,7 @@ const MOCK_TENANTS: Tenant[] = [
     device_limit: 100,
     device_count: 25,
     contact_email: "admin@acme.example.com",
+    settings: {},
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-10-30T12:00:00Z",
   },
@@ -167,6 +166,7 @@ const MOCK_TENANTS: Tenant[] = [
     device_limit: 50,
     device_count: 12,
     contact_email: null,
+    settings: {},
     created_at: "2026-01-15T00:00:00Z",
     updated_at: "2026-10-30T12:00:00Z",
   },
@@ -187,14 +187,20 @@ async function renderSettingsPage(initialTab = "profile") {
     preloadedState: {
       auth: {
         user: USER,
-        status: "authenticated",
+        status: "authenticated" as const,
         hydrated: true,
         error: null,
         mfaRequired: false,
         challengeToken: null,
         mfaMethods: [],
       },
-      ui: { toasts: [] },
+      ui: {
+        themeMode: "light" as const,
+        sidebarOpen: true,
+        sidebarCollapsed: false,
+        selectedTenantId: null,
+        toast: { open: false, message: "", severity: "info" as const },
+      },
     },
   });
   const queryClient = new QueryClient({

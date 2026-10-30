@@ -37,6 +37,7 @@ import RocketLaunchOutlinedIcon from "@mui/icons-material/RocketLaunchOutlined";
 import CommitOutlinedIcon from "@mui/icons-material/CommitOutlined";
 import EventBusyOutlinedIcon from "@mui/icons-material/EventBusyOutlined";
 import SummarizeOutlinedIcon from "@mui/icons-material/SummarizeOutlined";
+import SecurityOutlinedIcon from "@mui/icons-material/SecurityOutlined";
 import type { SvgIconComponent } from "@mui/icons-material";
 
 import { usePermissions } from "@/hooks/usePermissions";
@@ -72,6 +73,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: "DHCP", path: "/dhcp", icon: LanOutlinedIcon, permission: "dhcp:read" },
       { label: "DNS", path: "/dns", icon: PublicOutlinedIcon, permission: "dns:read" },
+      { label: "IPsec VPN", path: "/ipsec", icon: SecurityOutlinedIcon, permission: "device:read" },
       { label: "Firewall rules", path: "/rules", icon: GppGoodOutlinedIcon, permission: "rule:read" },
       { label: "NAT", path: "/nat", icon: SwapHorizOutlinedIcon, permission: "nat:read" },
       { label: "Aliases", path: "/aliases", icon: LabelOutlinedIcon, permission: "alias:read" },

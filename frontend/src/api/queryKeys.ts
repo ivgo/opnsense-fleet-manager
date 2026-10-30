@@ -57,6 +57,11 @@ export const qk = {
     records: (params: unknown) => ["dns", "records", params] as const,
     record: (id: string) => ["dns", "record", id] as const,
   },
+  ipsec: {
+    all: ["ipsec"] as const,
+    phase1: (params: unknown) => ["ipsec", "phase1", params] as const,
+    phase2: (params: unknown) => ["ipsec", "phase2", params] as const,
+  },
   rules: {
     all: ["rules"] as const,
     list: (params: unknown) => ["rules", "list", params] as const,

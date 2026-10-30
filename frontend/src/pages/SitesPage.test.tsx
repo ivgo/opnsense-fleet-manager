@@ -48,7 +48,6 @@ const USER: AuthUser = {
 const MOCK_SITES: Site[] = [
   {
     id: "site-1",
-    tenant_id: "tenant-1",
     name: "Headquarters",
     code: "HQ",
     description: "Main office building",
@@ -64,7 +63,6 @@ const MOCK_SITES: Site[] = [
   },
   {
     id: "site-2",
-    tenant_id: "tenant-1",
     name: "Branch Office",
     code: "BR",
     description: "Remote branch",
@@ -117,14 +115,20 @@ async function renderSitesPage() {
     preloadedState: {
       auth: {
         user: USER,
-        status: "authenticated",
+        status: "authenticated" as const,
         hydrated: true,
         error: null,
         mfaRequired: false,
         challengeToken: null,
         mfaMethods: [],
       },
-      ui: { toasts: [] },
+      ui: {
+        themeMode: "light" as const,
+        sidebarOpen: true,
+        sidebarCollapsed: false,
+        selectedTenantId: null,
+        toast: { open: false, message: "", severity: "info" as const },
+      },
     },
   });
   const queryClient = new QueryClient({

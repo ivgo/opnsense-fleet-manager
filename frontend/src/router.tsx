@@ -12,6 +12,7 @@ import DeviceDetailPage from "@/pages/DeviceDetailPage";
 import DevicesPage from "@/pages/DevicesPage";
 import DhcpPage from "@/pages/DhcpPage";
 import DnsPage from "@/pages/DnsPage";
+import IpsecPage from "@/pages/IpsecPage";
 import GitReposPage from "@/pages/GitReposPage";
 import GroupsPage from "@/pages/GroupsPage";
 import HaPage from "@/pages/HaPage";
@@ -54,6 +55,7 @@ export const router = createBrowserRouter([
       { path: "groups", element: <GroupsPage /> },
       { path: "dhcp", element: <DhcpPage /> },
       { path: "dns", element: <DnsPage /> },
+      { path: "ipsec", element: <IpsecPage /> },
       { path: "rules", element: <RulesPage /> },
       { path: "nat", element: <NatPage /> },
       { path: "aliases", element: <AliasesPage /> },

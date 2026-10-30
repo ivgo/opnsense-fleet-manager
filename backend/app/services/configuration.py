@@ -10,7 +10,7 @@ from typing import Any
 from jinja2 import Environment, StrictUndefined
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
+from app.core.exceptions import BadRequestError, ConflictError, NotFoundError, UpstreamError
 from app.core.logging import get_logger
 from app.integrations.opnsense.client import client_for
 from app.models.config import (
@@ -20,6 +20,8 @@ from app.models.config import (
     DnsRecord,
     FirewallRule,
     InterfaceConfig,
+    IpsecPhase1,
+    IpsecPhase2,
     NatRule,
     RouteConfig,
     Template,
@@ -31,6 +33,10 @@ from app.schemas.config import (
     AliasCreate,
     AliasUpdate,
     InterfaceCreate,
+    IpsecPhase1Create,
+    IpsecPhase1Update,
+    IpsecPhase2Create,
+    IpsecPhase2Update,
     NatCreate,
     NatUpdate,
     RouteCreate,
@@ -112,6 +118,16 @@ def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]
         else:
             result[key] = value
     return result
+
+
+def _response_ref(response: Any, *keys: str) -> str | None:
+    """Extract a reference ID from an OPNsense API response."""
+    if not isinstance(response, dict):
+        return None
+    for key in keys:
+        if response.get(key):
+            return str(response[key])
+    return None
 
 
 class RuleService:
@@ -765,6 +781,157 @@ class VlanService:
         return vlan
 
 
+def ipsec_phase1_payload(phase1: IpsecPhase1) -> dict[str, Any]:
+    """Translate a stored IPsec Phase 1 into the OPNsense phase1 body."""
+    return {
+        "enabled": "1" if phase1.enabled else "0",
+        "descr": managed_description(phase1.name),
+        "iketype": phase1.iketype,
+        "protocol": "esp",
+        "interface": phase1.interface,
+        "remote_gateway": phase1.remote_gateway,
+        "local_gateway": phase1.local_gateway or "",
+        "authentication_method": phase1.authentication_method,
+        "pre-shared-key": phase1.pre_shared_key or "",
+        "my_identifier": phase1.my_identifier or "",
+        "peer_identifier": phase1.peer_identifier or "",
+        "encryption": phase1.encryption,
+        "hash": phase1.hash,
+        "dh_group": phase1.dh_group,
+        "lifetime": str(phase1.lifetime),
+        "dpd_delay": str(phase1.dpd_delay),
+        "dpd_maxfail": str(phase1.dpd_maxfail),
+        "nat_traversal": phase1.nat_traversal,
+        "disabled": "0",
+    }
+
+
+def ipsec_phase2_payload(phase2: IpsecPhase2, phase1_uuid: str) -> dict[str, Any]:
+    """Translate a stored IPsec Phase 2 into the OPNsense phase2 body."""
+    return {
+        "enabled": "1" if phase2.enabled else "0",
+        "descr": managed_description(phase2.name),
+        "mode": phase2.mode,
+        "protocol": phase2.protocol,
+        "local_net": phase2.local_net,
+        "remote_net": phase2.remote_net,
+        "encryption": phase2.encryption,
+        "hash": phase2.hash,
+        "pfs_group": phase2.pfs_group,
+        "lifetime": str(phase2.lifetime),
+        "phase1_uuid": phase1_uuid,
+        "disabled": "0",
+    }
+
+
+class IpsecService:
+    """CRUD for IPsec Phase 1 and Phase 2 configuration."""
+
+    def __init__(
+        self, session: AsyncSession, tenant_id: uuid.UUID, actor_id: uuid.UUID | None = None
+    ) -> None:
+        self.session = session
+        self.tenant_id = tenant_id
+        self.uow = UnitOfWork(session, tenant_id)
+        self.actor_id = actor_id
+        self.audit = AuditService(session)
+
+    async def create_phase1(self, payload: IpsecPhase1Create) -> IpsecPhase1:
+        await self._ensure_device(payload.device_id)
+        existing = await self.session.execute(
+            self.uow.ipsec_phase1.query().where(
+                IpsecPhase1.device_id == payload.device_id, IpsecPhase1.name == payload.name
+            )
+        )
+        if existing.scalars().first():
+            raise ConflictError(f"Phase 1 '{payload.name}' already exists on this device")
+        phase1 = IpsecPhase1(tenant_id=self.tenant_id, **payload.model_dump())
+        self.session.add(phase1)
+        await self.session.flush()
+        await self.audit.record(
+            action="ipsec_phase1.created",
+            resource_type="IpsecPhase1",
+            resource_id=phase1.id,
+            tenant_id=self.tenant_id,
+            user_id=self.actor_id,
+            after={"name": phase1.name, "remote_gateway": phase1.remote_gateway},
+        )
+        return phase1
+
+    async def update_phase1(self, phase1_id: uuid.UUID, payload: IpsecPhase1Update) -> IpsecPhase1:
+        phase1 = await self.uow.ipsec_phase1.get_or_404(phase1_id)
+        for field, value in payload.model_dump(exclude_unset=True).items():
+            setattr(phase1, field, value)
+        await self.session.flush()
+        await self.audit.record(
+            action="ipsec_phase1.updated",
+            resource_type="IpsecPhase1",
+            resource_id=phase1.id,
+            tenant_id=self.tenant_id,
+            user_id=self.actor_id,
+            after=payload.model_dump(exclude_unset=True),
+        )
+        return phase1
+
+    async def delete_phase1(self, phase1_id: uuid.UUID) -> None:
+        phase1 = await self.uow.ipsec_phase1.get_or_404(phase1_id)
+        await self.uow.ipsec_phase1.delete(phase1)
+        await self.audit.record(
+            action="ipsec_phase1.deleted",
+            resource_type="IpsecPhase1",
+            resource_id=phase1.id,
+            tenant_id=self.tenant_id,
+            user_id=self.actor_id,
+            before={"name": phase1.name},
+        )
+
+    async def create_phase2(self, payload: IpsecPhase2Create) -> IpsecPhase2:
+        await self._ensure_device(payload.device_id)
+        phase2 = IpsecPhase2(tenant_id=self.tenant_id, **payload.model_dump())
+        self.session.add(phase2)
+        await self.session.flush()
+        await self.audit.record(
+            action="ipsec_phase2.created",
+            resource_type="IpsecPhase2",
+            resource_id=phase2.id,
+            tenant_id=self.tenant_id,
+            user_id=self.actor_id,
+            after={"name": phase2.name, "local_net": phase2.local_net},
+        )
+        return phase2
+
+    async def update_phase2(self, phase2_id: uuid.UUID, payload: IpsecPhase2Update) -> IpsecPhase2:
+        phase2 = await self.uow.ipsec_phase2.get_or_404(phase2_id)
+        for field, value in payload.model_dump(exclude_unset=True).items():
+            setattr(phase2, field, value)
+        await self.session.flush()
+        await self.audit.record(
+            action="ipsec_phase2.updated",
+            resource_type="IpsecPhase2",
+            resource_id=phase2.id,
+            tenant_id=self.tenant_id,
+            user_id=self.actor_id,
+            after=payload.model_dump(exclude_unset=True),
+        )
+        return phase2
+
+    async def delete_phase2(self, phase2_id: uuid.UUID) -> None:
+        phase2 = await self.uow.ipsec_phase2.get_or_404(phase2_id)
+        await self.uow.ipsec_phase2.delete(phase2)
+        await self.audit.record(
+            action="ipsec_phase2.deleted",
+            resource_type="IpsecPhase2",
+            resource_id=phase2.id,
+            tenant_id=self.tenant_id,
+            user_id=self.actor_id,
+            before={"name": phase2.name},
+        )
+
+    async def _ensure_device(self, device_id: uuid.UUID) -> None:
+        if await self.uow.devices.get(device_id) is None:
+            raise NotFoundError("Device not found")
+
+
 class ConfigurationDeployer:
     """Push desired state for a device to the OPNsense REST API.
 
@@ -1226,6 +1393,7 @@ class ConfigurationDeployer:
             "vlans": self.deploy_vlans,
             "dhcp": self.deploy_dhcp,
             "dns": self.deploy_dns,
+            "ipsec": self.deploy_ipsec,
         }
         unknown = [name for name in resources if name not in deployers]
         if unknown:
@@ -1239,3 +1407,108 @@ class ConfigurationDeployer:
             "details": details,
             "applied": apply and not dry_run,
         }
+
+    # ------------------------------------------------------------------ IPsec
+    async def deploy_ipsec(
+        self, device_id: uuid.UUID, *, dry_run: bool = False, apply: bool = True
+    ) -> dict[str, Any]:
+        """Push every stored IPsec Phase 1/2 of a device and prune stale OFME objects."""
+        device = await self.devices.get(device_id)
+        phases1 = await self.uow.ipsec_phase1.for_device(device_id)
+        phases2 = await self.uow.ipsec_phase2.for_device(device_id)
+
+        if dry_run:
+            return {
+                "device_id": str(device_id),
+                "phase1": [ipsec_phase1_payload(phase1) for phase1 in phases1],
+                "phase2": [
+                    ipsec_phase2_payload(phase2, "")
+                    for phase2 in phases2
+                ],
+                "applied": False,
+            }
+
+        base_url, key, secret = await self.devices.credentials(device)
+        created = updated = deleted = 0
+        phase1_uuids: dict[uuid.UUID, str] = {}
+        async with client_for(base_url, key, secret) as client:
+            changed = False
+            current_p1 = await client.search_ipsec_phase1()
+            existing_p1 = {
+                str(row.get("descr")): row
+                for row in (current_p1.get("rows") or [])
+                if isinstance(row, dict) and row.get("descr") and row.get("uuid")
+            }
+            for phase1 in phases1:
+                payload = ipsec_phase1_payload(phase1)
+                row = existing_p1.pop(payload["descr"], None)
+                if row is None:
+                    row = existing_p1.pop(phase1.name, None)
+                if row and row.get("uuid"):
+                    phase1_uuids[phase1.id] = str(row["uuid"])
+                    if needs_update(row, payload):
+                        await client.set_ipsec_phase1(str(row["uuid"]), payload)
+                        updated += 1
+                        changed = True
+                else:
+                    response = await client.add_ipsec_phase1(payload)
+                    ref = _response_ref(response, "uuid", "id")
+                    if ref is None:
+                        fresh = next(
+                            (
+                                item
+                                for item in (current_p1.get("rows") or [])
+                                if str(item.get("descr") or "") == payload["descr"]
+                            ),
+                            None,
+                        )
+                        ref = str(fresh["uuid"]) if fresh and fresh.get("uuid") else None
+                    if ref is None:
+                        raise UpstreamError("OPNsense did not return a Phase 1 UUID")
+                    phase1_uuids[phase1.id] = ref
+                    created += 1
+                    changed = True
+
+            for descr, row in existing_p1.items():
+                if is_managed_description(descr) and row.get("uuid"):
+                    await client.delete_ipsec_phase1(str(row["uuid"]))
+                    deleted += 1
+                    changed = True
+
+            current_p2 = await client.search_ipsec_phase2()
+            existing_p2 = {
+                str(row.get("descr")): row
+                for row in (current_p2.get("rows") or [])
+                if isinstance(row, dict) and row.get("descr") and row.get("uuid")
+            }
+            for phase2 in phases2:
+                phase1_uuid = phase1_uuids.get(phase2.phase1_id)
+                if not phase1_uuid:
+                    continue
+                payload = ipsec_phase2_payload(phase2, phase1_uuid)
+                row = existing_p2.pop(payload["descr"], None)
+                if row is None:
+                    row = existing_p2.pop(phase2.name, None)
+                if row and row.get("uuid"):
+                    if needs_update(row, payload):
+                        await client.set_ipsec_phase2(str(row["uuid"]), payload)
+                        updated += 1
+                        changed = True
+                else:
+                    await client.add_ipsec_phase2(payload)
+                    created += 1
+                    changed = True
+
+            for descr, row in existing_p2.items():
+                if is_managed_description(descr) and row.get("uuid"):
+                    await client.delete_ipsec_phase2(str(row["uuid"]))
+                    deleted += 1
+                    changed = True
+
+            if apply and changed:
+                await client.apply_ipsec_phase1()
+                await client.apply_ipsec()
+
+        counts = {"created": created, "updated": updated, "deleted": deleted}
+        await self._audit_apply("ipsec.applied", device_id, counts)
+        return {"device_id": str(device_id), **counts, "applied": apply}

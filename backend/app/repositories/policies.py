@@ -11,6 +11,8 @@ from app.models.config import (
     DnsRecord,
     FirewallRule,
     InterfaceConfig,
+    IpsecPhase1,
+    IpsecPhase2,
     NatRule,
     RouteConfig,
     Template,
@@ -112,6 +114,22 @@ class DnsRecordRepository(BaseRepository[DnsRecord]):
 
     async def for_name(self, device_id: uuid.UUID, name: str) -> list[DnsRecord]:
         stmt = self.query().where(DnsRecord.device_id == device_id, DnsRecord.name == name)
+        return list((await self.session.execute(stmt)).scalars().all())
+
+
+class IpsecPhase1Repository(BaseRepository[IpsecPhase1]):
+    model = IpsecPhase1
+
+    async def for_device(self, device_id: uuid.UUID) -> list[IpsecPhase1]:
+        stmt = self.query().where(IpsecPhase1.device_id == device_id).order_by(IpsecPhase1.name)
+        return list((await self.session.execute(stmt)).scalars().all())
+
+
+class IpsecPhase2Repository(BaseRepository[IpsecPhase2]):
+    model = IpsecPhase2
+
+    async def for_device(self, device_id: uuid.UUID) -> list[IpsecPhase2]:
+        stmt = self.query().where(IpsecPhase2.device_id == device_id).order_by(IpsecPhase2.name)
         return list((await self.session.execute(stmt)).scalars().all())
 
 

@@ -30,6 +30,7 @@ from app.models.enums import (
     RuleAction,
     RuleDirection,
     TemplateKind,
+    VpnProtocol,
 )
 
 
@@ -280,4 +281,68 @@ class DnsRecord(UUIDPrimaryKeyMixin, TenantScopedMixin, TimestampMixin, SoftDele
     port: Mapped[int | None] = mapped_column(Integer)
     description: Mapped[str | None] = mapped_column(Text)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+
+
+class IpsecPhase1(UUIDPrimaryKeyMixin, TenantScopedMixin, TimestampMixin, SoftDeleteMixin, Base):
+    """IPsec Phase 1 (IKE) configuration for a device."""
+
+    __tablename__ = "ipsec_phase1"
+    __table_args__ = (
+        UniqueConstraint("device_id", "name", name="uq_ipsec_phase1_device_name"),
+        Index("ix_ipsec_phase1_tenant_device", "tenant_id", "device_id"),
+    )
+
+    device_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("devices.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    iketype: Mapped[str] = mapped_column(String(16), default="ikev2", nullable=False)  # ikev1, ikev2
+    interface: Mapped[str] = mapped_column(String(32), default="wan", nullable=False)
+    remote_gateway: Mapped[str] = mapped_column(String(255), nullable=False)
+    local_gateway: Mapped[str | None] = mapped_column(String(255))
+    authentication_method: Mapped[str] = mapped_column(
+        String(32), default="pre_shared_key", nullable=False
+    )  # pre_shared_key, rsa, ecdsa, x509
+    pre_shared_key: Mapped[str | None] = mapped_column(Text)
+    my_identifier: Mapped[str | None] = mapped_column(String(255))
+    peer_identifier: Mapped[str | None] = mapped_column(String(255))
+    encryption: Mapped[list] = mapped_column(MutableList.as_mutable(JSONB), default=list)  # e.g., ["aes256gcm16"]
+    hash: Mapped[list] = mapped_column(MutableList.as_mutable(JSONB), default=list)  # e.g., ["sha256"]
+    dh_group: Mapped[str] = mapped_column(String(16), default="14", nullable=False)  # 14, 15, 16, 17, 18, 19, 20, 21
+    lifetime: Mapped[int] = mapped_column(Integer, default=28800, nullable=False)  # seconds
+    dpd_delay: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    dpd_maxfail: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    nat_traversal: Mapped[str] = mapped_column(String(8), default="force", nullable=False)  # force, disable, auto
+    created_by: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))
+
+
+class IpsecPhase2(UUIDPrimaryKeyMixin, TenantScopedMixin, TimestampMixin, SoftDeleteMixin, Base):
+    """IPsec Phase 2 (ESP/AH) configuration for a device."""
+
+    __tablename__ = "ipsec_phase2"
+    __table_args__ = (
+        UniqueConstraint("device_id", "phase1_id", "name", name="uq_ipsec_phase2_device_phase1_name"),
+        Index("ix_ipsec_phase2_tenant_device", "tenant_id", "device_id"),
+    )
+
+    device_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("devices.id", ondelete="CASCADE"), index=True
+    )
+    phase1_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("ipsec_phase1.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    mode: Mapped[str] = mapped_column(String(16), default="tunnel", nullable=False)  # tunnel, transport
+    protocol: Mapped[str] = mapped_column(String(8), default="esp", nullable=False)  # esp, ah, esp-ah
+    local_net: Mapped[str] = mapped_column(String(255), nullable=False)
+    remote_net: Mapped[str] = mapped_column(String(255), nullable=False)
+    encryption: Mapped[list] = mapped_column(MutableList.as_mutable(JSONB), default=list)  # e.g., ["aes256gcm16"]
+    hash: Mapped[list] = mapped_column(MutableList.as_mutable(JSONB), default=list)  # e.g., ["sha256"]
+    pfs_group: Mapped[str] = mapped_column(String(16), default="14", nullable=False)  # off, 14, 15, 16, 17, 18, 19, 20, 21
+    lifetime: Mapped[int] = mapped_column(Integer, default=3600, nullable=False)  # seconds
     created_by: Mapped[uuid.UUID | None] = mapped_column(PGUUID(as_uuid=True), ForeignKey("users.id"))

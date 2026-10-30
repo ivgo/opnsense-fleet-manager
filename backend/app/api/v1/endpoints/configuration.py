@@ -22,6 +22,12 @@ from app.schemas.config import (
     ApplyResult,
     ConfigChange,
     ConfigDiff,
+    IpsecPhase1Create,
+    IpsecPhase1Update,
+    IpsecPhase1Out,
+    IpsecPhase2Create,
+    IpsecPhase2Update,
+    IpsecPhase2Out,
 )
 from app.services.configuration import (
     ConfigurationDeployer,
@@ -33,7 +39,7 @@ from app.services.devices import DeviceService
 
 router = APIRouter(prefix="/configuration", tags=["Configuration"])
 
-DEFAULT_APPLY_RESOURCES = ["rules"]
+DEFAULT_APPLY_RESOURCES = ["rules", "nat", "vlans", "dhcp", "dns", "ipsec"]
 
 
 @router.post(
@@ -176,3 +182,143 @@ async def preview_configuration(
 ) -> list[dict]:
     rules = await UnitOfWork(session, tenant_id).rules.for_device(device_id)
     return [rule_payload(rule) for rule in rules]
+
+
+# ------------------------------------------------------------------ IPsec Phase 1
+@router.post(
+    "/ipsec/phase1",
+    response_model=IpsecPhase1Out,
+    dependencies=[Depends(require_permissions(P.POLICY_DEPLOY))],
+    summary="Create IPsec Phase 1 configuration",
+)
+async def create_ipsec_phase1(
+    payload: IpsecPhase1Create,
+    session: SessionDep,
+    tenant_id: TenantDep,
+    principal: CurrentPrincipal,
+) -> IpsecPhase1:
+    from app.services.configuration import IpsecService
+
+    service = IpsecService(session, tenant_id, principal.user_id)
+    return await service.create_phase1(payload)
+
+
+@router.patch(
+    "/ipsec/phase1/{phase1_id}",
+    response_model=IpsecPhase1Out,
+    dependencies=[Depends(require_permissions(P.POLICY_DEPLOY))],
+    summary="Update IPsec Phase 1 configuration",
+)
+async def update_ipsec_phase1(
+    phase1_id: uuid.UUID,
+    payload: IpsecPhase1Update,
+    session: SessionDep,
+    tenant_id: TenantDep,
+    principal: CurrentPrincipal,
+) -> IpsecPhase1:
+    from app.services.configuration import IpsecService
+
+    service = IpsecService(session, tenant_id, principal.user_id)
+    return await service.update_phase1(phase1_id, payload)
+
+
+@router.delete(
+    "/ipsec/phase1/{phase1_id}",
+    dependencies=[Depends(require_permissions(P.POLICY_DEPLOY))],
+    summary="Delete IPsec Phase 1 configuration",
+)
+async def delete_ipsec_phase1(
+    phase1_id: uuid.UUID,
+    session: SessionDep,
+    tenant_id: TenantDep,
+    principal: CurrentPrincipal,
+) -> dict[str, str]:
+    from app.services.configuration import IpsecService
+
+    service = IpsecService(session, tenant_id, principal.user_id)
+    await service.delete_phase1(phase1_id)
+    return {"status": "deleted"}
+
+
+@router.get(
+    "/ipsec/phase1/{device_id}",
+    response_model=list[IpsecPhase1Out],
+    dependencies=[Depends(require_permissions(P.DEVICE_READ))],
+    summary="List IPsec Phase 1 configurations for a device",
+)
+async def list_ipsec_phase1(
+    device_id: uuid.UUID,
+    session: SessionDep,
+    tenant_id: TenantDep,
+) -> list[IpsecPhase1]:
+    return await UnitOfWork(session, tenant_id).ipsec_phase1.for_device(device_id)
+
+
+# ------------------------------------------------------------------ IPsec Phase 2
+@router.post(
+    "/ipsec/phase2",
+    response_model=IpsecPhase2Out,
+    dependencies=[Depends(require_permissions(P.POLICY_DEPLOY))],
+    summary="Create IPsec Phase 2 configuration",
+)
+async def create_ipsec_phase2(
+    payload: IpsecPhase2Create,
+    session: SessionDep,
+    tenant_id: TenantDep,
+    principal: CurrentPrincipal,
+) -> IpsecPhase2:
+    from app.services.configuration import IpsecService
+
+    service = IpsecService(session, tenant_id, principal.user_id)
+    return await service.create_phase2(payload)
+
+
+@router.patch(
+    "/ipsec/phase2/{phase2_id}",
+    response_model=IpsecPhase2Out,
+    dependencies=[Depends(require_permissions(P.POLICY_DEPLOY))],
+    summary="Update IPsec Phase 2 configuration",
+)
+async def update_ipsec_phase2(
+    phase2_id: uuid.UUID,
+    payload: IpsecPhase2Update,
+    session: SessionDep,
+    tenant_id: TenantDep,
+    principal: CurrentPrincipal,
+) -> IpsecPhase2:
+    from app.services.configuration import IpsecService
+
+    service = IpsecService(session, tenant_id, principal.user_id)
+    return await service.update_phase2(phase2_id, payload)
+
+
+@router.delete(
+    "/ipsec/phase2/{phase2_id}",
+    dependencies=[Depends(require_permissions(P.POLICY_DEPLOY))],
+    summary="Delete IPsec Phase 2 configuration",
+)
+async def delete_ipsec_phase2(
+    phase2_id: uuid.UUID,
+    session: SessionDep,
+    tenant_id: TenantDep,
+    principal: CurrentPrincipal,
+) -> dict[str, str]:
+    from app.services.configuration import IpsecService
+
+    service = IpsecService(session, tenant_id, principal.user_id)
+    await service.delete_phase2(phase2_id)
+    return {"status": "deleted"}
+
+
+@router.get(
+    "/ipsec/phase2/{device_id}",
+    response_model=list[IpsecPhase2Out],
+    dependencies=[Depends(require_permissions(P.DEVICE_READ))],
+    summary="List IPsec Phase 2 configurations for a device",
+)
+async def list_ipsec_phase2(
+    device_id: uuid.UUID,
+    session: SessionDep,
+    tenant_id: TenantDep,
+) -> list[IpsecPhase2]:
+    return await UnitOfWork(session, tenant_id).ipsec_phase2.for_device(device_id)
