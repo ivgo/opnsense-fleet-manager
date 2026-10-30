@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
+  Alert,
   Box,
   Button,
   Checkbox,
@@ -8,12 +9,16 @@ import {
   FormControlLabel,
   IconButton,
   MenuItem,
+  Paper,
   Stack,
   TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import BoltOutlinedIcon from "@mui/icons-material/BoltOutlined";
+import CloudDownloadOutlinedIcon from "@mui/icons-material/CloudDownloadOutlined";
+import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
@@ -21,10 +26,13 @@ import PlayCircleOutlineIcon from "@mui/icons-material/PlayCircleOutline";
 import RadarOutlinedIcon from "@mui/icons-material/RadarOutlined";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { devicesApi, groupsApi, sitesApi } from "@/api/endpoints";
+import { bulkApi, devicesApi, groupsApi, sitesApi } from "@/api/endpoints";
 import { toApiError } from "@/api/client";
 import { qk } from "@/api/queryKeys";
 import type {
+  BulkAction,
+  BulkDeviceResponse,
+  CsvImportResult,
   Device,
   DeviceCreate,
   DeviceGroup,
@@ -43,8 +51,8 @@ import StatusChip from "@/components/StatusChip";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useAppDispatch } from "@/store/hooks";
 import { showToast } from "@/store/uiSlice";
-import { DEFAULT_PAGE_SIZE, DEVICE_STATUS_LABELS } from "@/utils/constants";
-import { formatDateTime, fromNow, parseLines } from "@/utils/format";
+import { DEFAULT_PAGE_SIZE, BULK_ACTION_LABELS, BULK_COMMAND_ACTIONS, DEVICE_STATUS_LABELS } from "@/utils/constants";
+import { downloadBlob, formatDateTime, fromNow, parseLines } from "@/utils/format";
 
 interface DeviceFormState {
   name: string;
@@ -82,6 +90,22 @@ const EMPTY_FORM: DeviceFormState = {
   status: "registered",
 };
 
+const BULK_DESCRIPTIONS: Record<BulkAction, string> = {
+  maintenance_on:
+    "Creates one maintenance window covering the selected devices, starting now. Alerts and notifications are silenced for its duration.",
+  maintenance_off:
+    "Ends every active maintenance window that covers the selected devices. Alerts resume immediately.",
+  command:
+    "Queues an agent command on each selected device. Only actions supported by the os-fleet-agent are listed.",
+  backup: "Queues a signed configuration backup for every selected device.",
+  firmware_upgrade:
+    "Queues a firmware upgrade job. The worker upgrades devices one by one and reports failures per device.",
+  reboot:
+    "Queues a reboot job. Devices drop their tunnels and return once the agent reconnects.",
+};
+
+const BULK_CONFIRM_ACTIONS: BulkAction[] = ["maintenance_off", "reboot", "firmware_upgrade"];
+
 export function DevicesPage() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
@@ -109,6 +133,21 @@ export function DevicesPage() {
   const [discoverPort, setDiscoverPort] = useState("443");
   const [discoverResults, setDiscoverResults] = useState<DiscoveryResult[]>([]);
   const [discoverError, setDiscoverError] = useState<string | null>(null);
+
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkAction, setBulkAction] = useState<BulkAction | null>(null);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkResult, setBulkResult] = useState<BulkDeviceResponse | null>(null);
+  const [bulkForm, setBulkForm] = useState({
+    command: BULK_COMMAND_ACTIONS[0].value as string,
+    payload: "",
+    duration_minutes: "60",
+    name: "",
+    package: "",
+  });
+  const [csvResult, setCsvResult] = useState<CsvImportResult | null>(null);
+  const [csvError, setCsvError] = useState<string | null>(null);
+  const csvInputRef = useRef<HTMLInputElement>(null);
 
   const listParams = useMemo(
     () => ({
@@ -253,6 +292,92 @@ export function DevicesPage() {
     },
     onError: (error) => setDiscoverError(toApiError(error).message),
   });
+
+  const bulkMutation = useMutation({
+    mutationFn: (action: BulkAction) => {
+      const params: Record<string, unknown> = {};
+      if (action === "command") {
+        params.action = bulkForm.command;
+        if (bulkForm.payload.trim()) params.payload = JSON.parse(bulkForm.payload);
+      }
+      if (action === "maintenance_on") {
+        params.duration_minutes = Number(bulkForm.duration_minutes) || 60;
+        if (bulkForm.name.trim()) params.name = bulkForm.name.trim();
+      }
+      if (action === "firmware_upgrade" && bulkForm.package.trim()) {
+        params.package = bulkForm.package.trim();
+      }
+      return bulkApi.devices({ action, device_ids: selectedIds, params });
+    },
+    onSuccess: (response) => {
+      invalidate();
+      setBulkAction(null);
+      setBulkError(null);
+      setSelectedIds([]);
+      setBulkResult(response);
+      dispatch(
+        showToast({
+          message: `${BULK_ACTION_LABELS[response.action] ?? response.action}: ${response.succeeded} of ${response.total} devices succeeded`,
+          severity: response.failed > 0 ? "warning" : "success",
+        }),
+      );
+    },
+    onError: (error) => setBulkError(toApiError(error).message),
+  });
+
+  const importMutation = useMutation({
+    mutationFn: (file: File) => bulkApi.importCsv(file),
+    onSuccess: (result) => {
+      invalidate();
+      setCsvError(null);
+      setCsvResult(result);
+      dispatch(
+        showToast({
+          message: `CSV import: ${result.created} created, ${result.skipped} skipped`,
+          severity: result.errors.length > 0 ? "warning" : "success",
+        }),
+      );
+    },
+    onError: (error) => {
+      setCsvResult(null);
+      setCsvError(toApiError(error).message);
+    },
+  });
+
+  const exportMutation = useMutation({
+    mutationFn: () => bulkApi.exportCsv(),
+    onSuccess: (blob) => {
+      downloadBlob(blob, `ofme-devices-${new Date().toISOString().slice(0, 10)}.csv`);
+      dispatch(showToast({ message: "Device inventory exported", severity: "success" }));
+    },
+    onError: (error) => dispatch(showToast({ message: toApiError(error).message, severity: "error" })),
+  });
+
+  const openBulk = (action: BulkAction) => {
+    setBulkError(null);
+    setBulkAction(action);
+  };
+
+  const submitBulk = () => {
+    if (!bulkAction) return;
+    if (bulkAction === "command" && bulkForm.payload.trim()) {
+      try {
+        JSON.parse(bulkForm.payload);
+      } catch {
+        setBulkError("The command payload must be valid JSON.");
+        return;
+      }
+    }
+    if (bulkAction === "maintenance_on") {
+      const minutes = Number(bulkForm.duration_minutes);
+      if (!Number.isInteger(minutes) || minutes < 1 || minutes > 10080) {
+        setBulkError("The maintenance duration must be between 1 and 10080 minutes (7 days).");
+        return;
+      }
+    }
+    setBulkError(null);
+    bulkMutation.mutate(bulkAction);
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -402,6 +527,26 @@ export function DevicesPage() {
         subtitle="Every OPNsense appliance managed by this tenant, its agent state and management endpoint."
         actions={
           <>
+            <PermissionGate permission="device:read">
+              <Button
+                variant="outlined"
+                startIcon={<CloudDownloadOutlinedIcon />}
+                onClick={() => exportMutation.mutate()}
+                disabled={exportMutation.isPending}
+              >
+                Export CSV
+              </Button>
+            </PermissionGate>
+            <PermissionGate permission="device:write">
+              <Button
+                variant="outlined"
+                startIcon={<CloudUploadOutlinedIcon />}
+                onClick={() => csvInputRef.current?.click()}
+                disabled={importMutation.isPending}
+              >
+                Import CSV
+              </Button>
+            </PermissionGate>
             <PermissionGate permission="device:write">
               <Button variant="outlined" startIcon={<RadarOutlinedIcon />} onClick={() => setDiscoverOpen(true)}>
                 Discover
@@ -428,6 +573,69 @@ export function DevicesPage() {
         }
       />
 
+      {selectedIds.length > 0 && (
+        <Paper
+          variant="outlined"
+          sx={{ p: 1.25, mb: 2, borderColor: "primary.main", bgcolor: "action.hover" }}
+        >
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={1}
+            alignItems={{ xs: "stretch", md: "center" }}
+            justifyContent="space-between"
+          >
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              <Chip color="primary" size="small" label={`${selectedIds.length} selected`} />
+              <Typography variant="caption" color="text.secondary">
+                Bulk actions run once per device and are recorded in the audit trail.
+              </Typography>
+            </Stack>
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <PermissionGate permission="device:exec">
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<BoltOutlinedIcon />}
+                  onClick={() => openBulk("command")}
+                >
+                  Run command
+                </Button>
+                <Button size="small" variant="outlined" onClick={() => openBulk("maintenance_on")}>
+                  Maintenance on
+                </Button>
+                <Button size="small" variant="outlined" onClick={() => openBulk("maintenance_off")}>
+                  Maintenance off
+                </Button>
+                <Button size="small" variant="outlined" onClick={() => openBulk("backup")}>
+                  Back up
+                </Button>
+                <Button size="small" variant="outlined" onClick={() => openBulk("reboot")}>
+                  Reboot
+                </Button>
+                <Button size="small" variant="outlined" onClick={() => openBulk("firmware_upgrade")}>
+                  Upgrade firmware
+                </Button>
+              </PermissionGate>
+              <Button size="small" color="inherit" onClick={() => setSelectedIds([])}>
+                Clear
+              </Button>
+            </Stack>
+          </Stack>
+        </Paper>
+      )}
+
+      <input
+        ref={csvInputRef}
+        type="file"
+        accept=".csv,text/csv"
+        hidden
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) importMutation.mutate(file);
+        }}
+      />
+
       <DataTable
         columns={columns}
         rows={devicesQuery.data?.items ?? []}
@@ -447,6 +655,7 @@ export function DevicesPage() {
           setOrder(nextOrder);
         }}
         onRowClick={(row) => navigate(`/devices/${row.id}`)}
+        selection={{ selectedIds, onChange: setSelectedIds }}
         emptyTitle="No devices match the filters"
         emptyDescription="Register a device manually or run a subnet discovery to enroll appliances."
         emptyAction={
@@ -762,6 +971,192 @@ export function DevicesPage() {
         onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
         onClose={() => setDeleteTarget(null)}
       />
+
+      <FormDialog
+        open={Boolean(bulkAction)}
+        title={
+          bulkAction
+            ? `${BULK_ACTION_LABELS[bulkAction] ?? bulkAction} — ${selectedIds.length} device(s)`
+            : "Bulk action"
+        }
+        description={
+          bulkAction ? (
+            <Typography variant="body2" color="text.secondary">
+              {BULK_DESCRIPTIONS[bulkAction]}
+            </Typography>
+          ) : undefined
+        }
+        submitLabel={bulkAction ? BULK_ACTION_LABELS[bulkAction] ?? "Run" : "Run"}
+        loading={bulkMutation.isPending}
+        error={bulkError}
+        submitDisabled={selectedIds.length === 0}
+        onSubmit={submitBulk}
+        onClose={() => {
+          setBulkAction(null);
+          setBulkError(null);
+        }}
+        maxWidth="sm"
+      >
+        {bulkAction === "command" && (
+          <>
+            <TextField
+              select
+              label="Agent command"
+              value={bulkForm.command}
+              onChange={(event) => setBulkForm((value) => ({ ...value, command: event.target.value }))}
+              helperText="Firmware actions are available through the dedicated bulk actions instead."
+            >
+              {BULK_COMMAND_ACTIONS.map((action) => (
+                <MenuItem key={action.value} value={action.value}>
+                  {action.label}
+                </MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              label="Command payload (JSON)"
+              value={bulkForm.payload}
+              onChange={(event) => setBulkForm((value) => ({ ...value, payload: event.target.value }))}
+              multiline
+              minRows={2}
+              placeholder='{"interface": "wan"}'
+              helperText="Optional. Must be a JSON object; leave empty to send no payload."
+            />
+          </>
+        )}
+
+        {bulkAction === "maintenance_on" && (
+          <>
+            <TextField
+              label="Duration (minutes)"
+              type="number"
+              value={bulkForm.duration_minutes}
+              onChange={(event) =>
+                setBulkForm((value) => ({ ...value, duration_minutes: event.target.value }))
+              }
+              inputProps={{ min: 1, max: 10080 }}
+              helperText="Between 1 minute and 7 days. Defaults to 60 minutes."
+            />
+            <TextField
+              label="Window name"
+              value={bulkForm.name}
+              onChange={(event) => setBulkForm((value) => ({ ...value, name: event.target.value }))}
+              helperText="Optional. A timestamped name is generated when left blank."
+            />
+          </>
+        )}
+
+        {bulkAction === "firmware_upgrade" && (
+          <TextField
+            label="Firmware package"
+            value={bulkForm.package}
+            onChange={(event) => setBulkForm((value) => ({ ...value, package: event.target.value }))}
+            helperText="Optional. Leave blank to let the worker pick the latest available package."
+          />
+        )}
+
+        {bulkAction && BULK_CONFIRM_ACTIONS.includes(bulkAction) && (
+          <Alert severity={bulkAction === "maintenance_off" ? "info" : "warning"}>
+            {bulkAction === "maintenance_off"
+              ? "Ending maintenance early may raise alerts for conditions that are still present."
+              : "This action changes device state. Confirm that the selected devices are the intended targets."}
+          </Alert>
+        )}
+      </FormDialog>
+
+      <FormDialog
+        open={Boolean(bulkResult)}
+        title="Bulk action results"
+        description={
+          bulkResult ? (
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <Chip size="small" label={`${bulkResult.total} devices`} />
+              <Chip size="small" color="success" variant="outlined" label={`${bulkResult.succeeded} succeeded`} />
+              <Chip
+                size="small"
+                color={bulkResult.failed > 0 ? "error" : "default"}
+                variant="outlined"
+                label={`${bulkResult.failed} failed`}
+              />
+            </Stack>
+          ) : undefined
+        }
+        submitLabel="Close"
+        onSubmit={() => setBulkResult(null)}
+        onClose={() => setBulkResult(null)}
+        maxWidth="md"
+      >
+        <Stack spacing={1} sx={{ maxHeight: 380, overflowY: "auto" }}>
+          {bulkResult?.results.map((result) => (
+            <Stack
+              key={result.device_id}
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+              spacing={1}
+              sx={{ p: 1, border: 1, borderColor: "divider", borderRadius: 1.5 }}
+            >
+              <Box sx={{ minWidth: 0 }}>
+                <Typography variant="body2" fontWeight={600} noWrap>
+                  {result.name}
+                </Typography>
+                {result.message && (
+                  <Typography variant="caption" color="text.secondary">
+                    {result.message}
+                  </Typography>
+                )}
+              </Box>
+              <StatusChip status={result.status} />
+            </Stack>
+          ))}
+        </Stack>
+      </FormDialog>
+
+      <FormDialog
+        open={Boolean(csvResult) || Boolean(csvError)}
+        title="CSV import"
+        description={
+          <Typography variant="body2" color="text.secondary">
+            Devices are matched by name. Existing devices are skipped; unknown site names are reported per row.
+          </Typography>
+        }
+        submitLabel="Close"
+        onSubmit={() => {
+          setCsvResult(null);
+          setCsvError(null);
+        }}
+        onClose={() => {
+          setCsvResult(null);
+          setCsvError(null);
+        }}
+        maxWidth="md"
+      >
+        {csvError && <Alert severity="error">{csvError}</Alert>}
+        {csvResult && (
+          <Stack spacing={2}>
+            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <Chip size="small" color="success" variant="outlined" label={`${csvResult.created} created`} />
+              <Chip size="small" variant="outlined" label={`${csvResult.skipped} skipped`} />
+              {csvResult.errors.length > 0 && (
+                <Chip
+                  size="small"
+                  color="error"
+                  variant="outlined"
+                  label={`${csvResult.errors.length} row error(s)`}
+                />
+              )}
+            </Stack>
+            {csvResult.errors.length > 0 && (
+              <Stack spacing={0.5} sx={{ maxHeight: 280, overflowY: "auto" }}>
+                {csvResult.errors.map((error, index) => (
+                  <Typography key={`${error.row}-${index}`} variant="caption" color="error">
+                    Row {error.row}: {error.error}
+                  </Typography>
+                ))}
+              </Stack>
+            )}
+          </Stack>
+        )}
+      </FormDialog>
     </>
   );
 }

@@ -1,4 +1,11 @@
-import type { ComplianceFramework, Environment, PolicyKind, TaskKind, TopologyType } from "@/api/types";
+import type {
+  ComplianceFramework,
+  Environment,
+  PolicyKind,
+  ReportKind,
+  TaskKind,
+  TopologyType,
+} from "@/api/types";
 
 export const NAV_WIDTH = 272;
 export const NAV_WIDTH_COLLAPSED = 76;
@@ -110,8 +117,51 @@ export const TASK_KINDS: Array<{ value: TaskKind; label: string }> = [
   { value: "policy_deploy", label: "Policy deployment" },
   { value: "drift_scan", label: "Drift scan" },
   { value: "metric_collect", label: "Metric collection" },
+  { value: "report", label: "PDF report" },
   { value: "custom", label: "Custom (safe actions)" },
 ];
+
+export const MAINTENANCE_TARGET_LABELS: Record<string, string> = {
+  fleet: "Whole fleet",
+  device: "Devices",
+  site: "Sites",
+  group: "Groups",
+};
+
+export const REPORT_KINDS: Array<{ value: ReportKind; label: string; description: string }> = [
+  { value: "fleet", label: "Fleet summary", description: "Inventory, health, open alerts and compliance" },
+  { value: "compliance", label: "Compliance", description: "Framework scores and failing controls" },
+  { value: "traffic", label: "Traffic", description: "Interface throughput for the selected period" },
+  { value: "alerts", label: "Alerts", description: "Alert history and acknowledgement state" },
+];
+
+export const REPORT_KIND_LABELS: Record<string, string> = Object.fromEntries(
+  REPORT_KINDS.map((item) => [item.value, item.label]),
+);
+
+export const REPORT_STATUS_LABELS: Record<string, string> = {
+  pending: "Queued",
+  generating: "Generating",
+  ready: "Ready",
+  failed: "Failed",
+};
+
+export const BULK_ACTION_LABELS: Record<string, string> = {
+  maintenance_on: "Enter maintenance",
+  maintenance_off: "Leave maintenance",
+  command: "Run command",
+  backup: "Create backups",
+  firmware_upgrade: "Upgrade firmware",
+  reboot: "Reboot devices",
+};
+
+export const BULK_COMMAND_ACTIONS = [
+  { value: "collect_diagnostics", label: "Collect diagnostics" },
+  { value: "sync_config", label: "Synchronise configuration" },
+  { value: "reload_firewall", label: "Reload firewall rules" },
+  { value: "update_telemetry", label: "Refresh telemetry" },
+  { value: "ping", label: "Ping the agent" },
+] as const;
 
 export const TOPOLOGY_TYPES: Array<{ value: TopologyType; label: string }> = [
   { value: "hub_spoke", label: "Hub & spoke" },

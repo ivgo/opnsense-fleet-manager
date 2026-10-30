@@ -71,6 +71,18 @@ export function setTokens(accessToken: string, refreshToken: string, expiresInSe
   write(EXPIRES_KEY, String(expiresAt));
 }
 
+/**
+ * Record that the browser now holds the HttpOnly auth cookies — for example
+ * after the SAML assertion consumer service redirects back to the SPA.
+ *
+ * JavaScript cannot read the cookie values, so only the expiry hint is stored;
+ * `getAccessToken()` then reports "cookie" and the axios interceptor relies on
+ * the browser to attach the credentials.
+ */
+export function markCookieSession(expiresInSeconds = 900): void {
+  setTokens("cookie", "cookie", expiresInSeconds);
+}
+
 export function getTokens(): StoredTokens | null {
   if (memoryTokens) return memoryTokens;
   // For cookie-based auth, we don't have direct access to tokens from JS

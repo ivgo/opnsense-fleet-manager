@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import {
   Box,
+  Checkbox,
   LinearProgress,
   Paper,
   Skeleton,
@@ -33,6 +34,13 @@ export interface DataTableColumn<T> {
 
 export type SortOrder = "asc" | "desc";
 
+export interface DataTableSelection<T> {
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
+  /** Rows that cannot be selected (for example unmanageable devices). */
+  isRowSelectable?: (row: T) => boolean;
+}
+
 export interface DataTableProps<T> {
   columns: Array<DataTableColumn<T>>;
   rows: T[];
@@ -57,6 +65,8 @@ export interface DataTableProps<T> {
   dense?: boolean;
   maxHeight?: number | string;
   stickyHeader?: boolean;
+  /** Enables the leading checkbox column. Omit for read-only tables. */
+  selection?: DataTableSelection<T>;
 }
 
 function responsiveDisplay(hideBelow?: "sm" | "md" | "lg") {
@@ -89,9 +99,36 @@ export function DataTable<T>({
   dense = false,
   maxHeight,
   stickyHeader = false,
+  selection,
 }: DataTableProps<T>) {
   const paginated = typeof total === "number" && Boolean(onPageChange);
   const showTable = loading || !error || rows.length > 0;
+  const columnCount = columns.length + (selection ? 1 : 0);
+
+  const isSelectable = (row: T) => !selection?.isRowSelectable || selection.isRowSelectable(row);
+  const selectableRows = selection ? rows.filter(isSelectable) : [];
+  const selectedOnPage = selection
+    ? selectableRows.filter((row) => selection.selectedIds.includes(getRowId(row)))
+    : [];
+  const allSelected = selectableRows.length > 0 && selectedOnPage.length === selectableRows.length;
+  const someSelected = selectedOnPage.length > 0 && !allSelected;
+
+  const toggleAll = () => {
+    if (!selection) return;
+    const pageIds = new Set(selectableRows.map(getRowId));
+    const remaining = selection.selectedIds.filter((id) => !pageIds.has(id));
+    selection.onChange(allSelected ? remaining : [...remaining, ...pageIds]);
+  };
+
+  const toggleRow = (row: T) => {
+    if (!selection) return;
+    const id = getRowId(row);
+    selection.onChange(
+      selection.selectedIds.includes(id)
+        ? selection.selectedIds.filter((item) => item !== id)
+        : [...selection.selectedIds, id],
+    );
+  };
 
   const handleSort = (key: string) => {
     if (!onSortChange) return;
@@ -110,6 +147,18 @@ export function DataTable<T>({
         <Table stickyHeader={stickyHeader} size={dense ? "small" : "medium"} aria-label="data table">
           <TableHead>
             <TableRow>
+              {selection && (
+                <TableCell padding="checkbox">
+                  <Checkbox
+                    size="small"
+                    checked={allSelected}
+                    indeterminate={someSelected}
+                    onChange={toggleAll}
+                    disabled={selectableRows.length === 0}
+                    inputProps={{ "aria-label": "Select all rows on this page" }}
+                  />
+                </TableCell>
+              )}
               {columns.map((column) => (
                 <TableCell
                   key={column.key}
@@ -135,7 +184,7 @@ export function DataTable<T>({
           <TableBody>
             {error && rows.length === 0 && (
               <TableRow>
-                <TableCell colSpan={columns.length} sx={{ borderBottom: 0 }}>
+                <TableCell colSpan={columnCount} sx={{ borderBottom: 0 }}>
                   <ErrorState message={error} onRetry={onRetry} compact />
                 </TableCell>
               </TableRow>
@@ -145,6 +194,11 @@ export function DataTable<T>({
               rows.length === 0 &&
               Array.from({ length: 6 }).map((_, rowIndex) => (
                 <TableRow key={`skeleton-${rowIndex}`}>
+                  {selection && (
+                    <TableCell padding="checkbox">
+                      <Skeleton variant="circular" width={18} height={18} />
+                    </TableCell>
+                  )}
                   {columns.map((column) => (
                     <TableCell key={column.key} sx={{ display: responsiveDisplay(column.hideBelow) }}>
                       <Skeleton width="70%" />
@@ -157,7 +211,7 @@ export function DataTable<T>({
               !loading &&
               rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={columns.length} sx={{ borderBottom: 0 }}>
+                  <TableCell colSpan={columnCount} sx={{ borderBottom: 0 }}>
                     <EmptyState title={emptyTitle} description={emptyDescription} action={emptyAction} />
                   </TableCell>
                 </TableRow>
@@ -170,6 +224,21 @@ export function DataTable<T>({
                 onClick={onRowClick ? () => onRowClick(row) : undefined}
                 sx={{ cursor: onRowClick ? "pointer" : "default", "&:last-child td": { borderBottom: 0 } }}
               >
+                {selection && (
+                  <TableCell
+                    padding="checkbox"
+                    onClick={(event) => event.stopPropagation()}
+                    sx={{ cursor: "default" }}
+                  >
+                    <Checkbox
+                      size="small"
+                      checked={selection.selectedIds.includes(getRowId(row))}
+                      onChange={() => toggleRow(row)}
+                      disabled={!isSelectable(row)}
+                      inputProps={{ "aria-label": `Select ${getRowId(row)}` }}
+                    />
+                  </TableCell>
+                )}
                 {columns.map((column) => {
                   const content = column.render ? column.render(row) : (row as Record<string, unknown>)[column.key];
                   return (

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
-  Box,
   Button,
   Chip,
   IconButton,
@@ -45,13 +44,10 @@ export function InventoryPage() {
   const queryClient = useQueryClient();
   const [params, setParams] = useSearchParams();
 
-  const [page, setPage] = useState(1);
   const [search, setSearch] = useState(params.get("search") || "");
   const [statusFilter, setStatusFilter] = useState(params.get("status") || "");
   const [sourceFilter, setSourceFilter] = useState(params.get("source") || "");
   const debouncedSearch = useDebounce(search.trim(), 350);
-
-  const [pauseTarget, setPauseTarget] = useState<{ mac: string; minutes: number } | null>(null);
 
   useEffect(() => {
     const newParams = new URLSearchParams();
@@ -61,16 +57,20 @@ export function InventoryPage() {
     setParams(newParams);
   }, [search, statusFilter, sourceFilter, setParams]);
 
+  const [pauseTarget, setPauseTarget] = useState<{ mac: string; minutes: number } | null>(null);
+
+  const queryParams = { status: statusFilter || undefined, source: sourceFilter || undefined, search: debouncedSearch || undefined };
+
   const { data: clients = [], isLoading } = useQuery({
-    queryKey: qk.inventory.list({ status: statusFilter || undefined, source: sourceFilter || undefined, search: debouncedSearch || undefined }),
-    queryFn: () => inventoryApi.list({ status: statusFilter || undefined, source: sourceFilter || undefined, search: debouncedSearch || undefined }),
+    queryKey: qk.inventory.list(queryParams),
+    queryFn: () => inventoryApi.list(queryParams),
     refetchInterval: 30_000,
   });
 
   const blockMutation = useMutation({
     mutationFn: (mac: string) => inventoryApi.block(mac),
     onSuccess: (_, mac) => {
-      void queryClient.invalidateQueries({ queryKey: qk.inventory.list() });
+      void queryClient.invalidateQueries({ queryKey: qk.inventory.list(queryParams) });
       dispatch(showToast({ message: `Client ${mac} blocked`, severity: "success" }));
     },
     onError: (error: Error) => dispatch(showToast({ message: error.message, severity: "error" })),
@@ -79,7 +79,7 @@ export function InventoryPage() {
   const pauseMutation = useMutation({
     mutationFn: ({ mac, minutes }: { mac: string; minutes: number }) => inventoryApi.pause(mac, minutes),
     onSuccess: (_, { mac }) => {
-      void queryClient.invalidateQueries({ queryKey: qk.inventory.list() });
+      void queryClient.invalidateQueries({ queryKey: qk.inventory.list(queryParams) });
       dispatch(showToast({ message: `Client ${mac} paused for ${pauseTarget?.minutes} minutes`, severity: "success" }));
       setPauseTarget(null);
     },
@@ -89,7 +89,7 @@ export function InventoryPage() {
   const unblockMutation = useMutation({
     mutationFn: (mac: string) => inventoryApi.unblock(mac),
     onSuccess: (_, mac) => {
-      void queryClient.invalidateQueries({ queryKey: qk.inventory.list() });
+      void queryClient.invalidateQueries({ queryKey: qk.inventory.list(queryParams) });
       dispatch(showToast({ message: `Client ${mac} unblocked`, severity: "success" }));
     },
     onError: (error: Error) => dispatch(showToast({ message: error.message, severity: "error" })),
@@ -128,10 +128,7 @@ export function InventoryPage() {
       key: "status",
       label: "Status",
       width: 100,
-      render: (row) => {
-        const color = row.status === "active" ? "success" : row.status === "blocked" ? "error" : "warning";
-        return <StatusChip status={row.status} color={color} />;
-      },
+      render: (row) => <StatusChip status={row.status} />,
     },
     {
       key: "vendor",
@@ -209,7 +206,7 @@ export function InventoryPage() {
       <PageHeader
         title="Client Inventory"
         subtitle={`Discovering clients via ARP, DHCP, and LLDP`}
-        action={
+        actions={
           <PermissionGate permission="inventory:write">
             <Button variant="contained" startIcon={<BlockIcon />} disabled>
               Block Selected
@@ -259,10 +256,10 @@ export function InventoryPage() {
       </Stack>
 
       <DataTable
-        caption="Client devices discovered on the network"
         columns={columns}
         rows={clients}
-        isLoading={isLoading}
+        getRowId={(row) => row.mac_address}
+        loading={isLoading}
         emptyTitle="No clients discovered"
         emptyDescription="Clients will appear here once discovered via ARP, DHCP, or LLDP."
       />

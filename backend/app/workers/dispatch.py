@@ -18,6 +18,7 @@ log = get_logger("ofme.workers.dispatch")
 # Canonical Celery task names. The worker modules register exactly these names.
 TASK_BACKUP_ALL = "ofme.backups.run_scheduled"
 TASK_BACKUP_DEVICE = "ofme.backups.create"
+TASK_BACKUP_POSTGRES = "ofme.backup.pgbackrest_backup"
 TASK_COMPLIANCE_RUN = "ofme.compliance.run"
 TASK_DRIFT_SCAN = "ofme.policies.drift_scan"
 TASK_POLICY_DEPLOY = "ofme.policies.deploy"
@@ -48,6 +49,7 @@ ALL_TASK_NAMES: frozenset[str] = frozenset(
     {
         TASK_BACKUP_ALL,
         TASK_BACKUP_DEVICE,
+        TASK_BACKUP_POSTGRES,
         TASK_COMPLIANCE_RUN,
         TASK_DRIFT_SCAN,
         TASK_POLICY_DEPLOY,

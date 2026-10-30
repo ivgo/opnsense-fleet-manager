@@ -19,6 +19,7 @@ TASK_MODULES = [
     "app.workers.firmware",
     "app.workers.gitops",
     "app.workers.monitoring",
+    "app.workers.pgbackrest",
     "app.workers.policies",
     "app.workers.reports",
     "app.workers.sdwan",
@@ -43,6 +44,7 @@ celery_app.conf.update(
     task_default_routing_key="ofme",
     task_routes={
         "ofme.backups.*": {"queue": "ofme-backups"},
+        "ofme.backup.*": {"queue": "ofme-backups"},
         "ofme.compliance.*": {"queue": "ofme-compliance"},
         "ofme.policies.*": {"queue": "ofme-policies"},
         "ofme.gitops.*": {"queue": "ofme-policies"},
@@ -114,6 +116,17 @@ celery_app.conf.update(
             "task": "ofme.compliance.run",
             "schedule": crontab(hour=5, minute=0, day_of_week="monday"),
             "kwargs": {"params": {"all_frameworks": True}},
+        },
+        # pgBackRest PostgreSQL backups: daily incremental, weekly full
+        "pgbackrest-daily-incr": {
+            "task": "ofme.backup.pgbackrest_backup",
+            "schedule": crontab(hour=1, minute=0),
+            "kwargs": {"params": {"backup_type": "incr"}},
+        },
+        "pgbackrest-weekly-full": {
+            "task": "ofme.backup.pgbackrest_backup",
+            "schedule": crontab(hour=0, minute=0, day_of_week="sunday"),
+            "kwargs": {"params": {"backup_type": "full"}},
         },
         # Materialise tenant cron schedules every minute.
         "tenant-schedules": {

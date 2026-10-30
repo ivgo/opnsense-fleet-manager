@@ -21,7 +21,7 @@ def _run_pgbackrest(*args: str) -> dict[str, Any]:
     """Run a pgBackRest command via docker exec on postgres container."""
     # Use docker exec to run pgbackrest inside the postgres container where
     # it can access the local PostgreSQL data directory without SSH.
-    cmd = ["docker", "exec", "-u", "root", "ofme-postgres-1", "pgbackrest", *args]
+    cmd = ["docker", "exec", "-u", "postgres", "ofme-postgres-1", "pgbackrest", *args]
     log.info("pgbackrest.command", command=" ".join(cmd))
 
     try:

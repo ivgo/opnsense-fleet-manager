@@ -8,6 +8,7 @@ import {
   DEVICE_STATUS_LABELS,
   JOB_STATUS_LABELS,
   POLICY_STATUS_LABELS,
+  REPORT_STATUS_LABELS,
   TUNNEL_STATUS_LABELS,
 } from "@/utils/constants";
 
@@ -21,6 +22,7 @@ const LABELS: Record<string, string> = {
   ...JOB_STATUS_LABELS,
   ...BACKUP_TYPE_LABELS,
   ...TUNNEL_STATUS_LABELS,
+  ...REPORT_STATUS_LABELS,
   ...{
     active: "Active",
     inactive: "Inactive",
@@ -109,6 +111,9 @@ const COLORS: Record<string, ChipColor> = {
   expired: "error",
   in_sync: "success",
   failover_requested: "warning",
+  ready: "success",
+  generating: "warning",
+  skipped: "default",
 };
 
 export interface StatusChipProps {

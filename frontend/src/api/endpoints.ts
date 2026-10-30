@@ -1,4 +1,4 @@
-import { cleanParams, del, get, getBlob, patch, post, put } from "./client";
+import { cleanParams, del, get, getBlob, patch, post, postForm, put } from "./client";
 import type {
   Alert,
   AlertRule,
@@ -17,12 +17,15 @@ import type {
   BackupRestorePayload,
   BackupVerification,
   BootstrapPackage,
+  BulkDeviceAction,
+  BulkDeviceResponse,
   Certificate,
   ChangeRequest,
   ComplianceFramework,
   ComplianceReport,
   ComplianceRunPayload,
   ComplianceSummary,
+  CsvImportResult,
   DashboardOverview,
   Deployment,
   Device,
@@ -65,6 +68,9 @@ import type {
   JobPayload,
   LoginPayload,
   LoginResponse,
+  MaintenanceWindow,
+  MaintenanceWindowPayload,
+  MaintenanceWindowUpdatePayload,
   Message,
   MfaSetup,
   MfaVerifyPayload,
@@ -81,6 +87,8 @@ import type {
   PolicyPayload,
   PolicyValidation,
   ReadinessReport,
+  Report,
+  ReportPayload,
   Role,
   RoleMatrixEntry,
   Rule,
@@ -176,6 +184,10 @@ export const authApi = {
     }),
   oidcCallback: (code: string, state: string) =>
     post<LoginResponse>(`${P}/auth/oidc/callback`, { code, state }, { skipRefresh: true }),
+  samlAuthorize: (tenant?: string) =>
+    get<{ authorization_url: string; state: string }>(`${P}/auth/saml/authorize`, {
+      tenant: tenant ?? undefined,
+    }),
 };
 
 /* ----------------------------------------------------------------- tenancy */
@@ -646,6 +658,41 @@ export const backupsApi = {
   sweep: (type = "scheduled") => post<Record<string, unknown>>(`${P}/backups/sweep`, { type }),
   retention: (payload: { retention_days?: number; keep_per_device?: number } = {}) =>
     post<Record<string, unknown>>(`${P}/backups/retention`, payload),
+};
+
+/* ----------------------------------------------------- maintenance windows */
+
+export const maintenanceApi = {
+  list: () => get<MaintenanceWindow[]>(`${P}/maintenance-windows`),
+  active: () => get<MaintenanceWindow[]>(`${P}/maintenance-windows/active`),
+  create: (payload: MaintenanceWindowPayload) =>
+    post<MaintenanceWindow>(`${P}/maintenance-windows`, payload),
+  update: (id: string, payload: MaintenanceWindowUpdatePayload) =>
+    patch<MaintenanceWindow>(`${P}/maintenance-windows/${id}`, payload),
+  remove: (id: string) => del<Message>(`${P}/maintenance-windows/${id}`),
+};
+
+/* ----------------------------------------------------------------- reports */
+
+export const reportsApi = {
+  list: () => get<Report[]>(`${P}/reports`),
+  get: (id: string) => get<Report>(`${P}/reports/${id}`),
+  create: (payload: ReportPayload) => post<Report>(`${P}/reports`, payload),
+  download: (id: string) => getBlob(`${P}/reports/${id}/download`),
+  remove: (id: string) => del<Message>(`${P}/reports/${id}`),
+};
+
+/* ------------------------------------------------------------ bulk actions */
+
+export const bulkApi = {
+  devices: (payload: BulkDeviceAction) =>
+    post<BulkDeviceResponse>(`${P}/bulk/devices`, payload, { timeout: 180_000 }),
+  exportCsv: () => getBlob(`${P}/bulk/devices/export.csv`, { timeout: 120_000 }),
+  importCsv: (file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return postForm<CsvImportResult>(`${P}/bulk/devices/import`, body, { timeout: 180_000 });
+  },
 };
 
 /* ------------------------------------------------------------------- jobs */

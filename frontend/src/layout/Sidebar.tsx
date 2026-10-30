@@ -35,6 +35,8 @@ import SwapHorizOutlinedIcon from "@mui/icons-material/SwapHorizOutlined";
 import LabelOutlinedIcon from "@mui/icons-material/LabelOutlined";
 import RocketLaunchOutlinedIcon from "@mui/icons-material/RocketLaunchOutlined";
 import CommitOutlinedIcon from "@mui/icons-material/CommitOutlined";
+import EventBusyOutlinedIcon from "@mui/icons-material/EventBusyOutlined";
+import SummarizeOutlinedIcon from "@mui/icons-material/SummarizeOutlined";
 import type { SvgIconComponent } from "@mui/icons-material";
 
 import { usePermissions } from "@/hooks/usePermissions";
@@ -103,6 +105,18 @@ const NAV_GROUPS: NavGroup[] = [
         permission: "alert:read",
       },
       { label: "Backups", path: "/backups", icon: BackupOutlinedIcon, permission: "backup:read" },
+      {
+        label: "Maintenance",
+        path: "/maintenance",
+        icon: EventBusyOutlinedIcon,
+        permission: "alert:read",
+      },
+      {
+        label: "Reports",
+        path: "/reports",
+        icon: SummarizeOutlinedIcon,
+        permission: "report:read",
+      },
       { label: "Jobs", path: "/jobs", icon: WorkHistoryOutlinedIcon, permission: "job:read" },
       { label: "Audit", path: "/audit", icon: HistoryOutlinedIcon, permission: "audit:read" },
     ],

@@ -777,6 +777,115 @@ export interface BackupRestorePayload {
   reboot?: boolean;
 }
 
+/* ------------------------------------------------------- maintenance windows */
+
+export type MaintenanceTarget = "fleet" | "device" | "site" | "group";
+
+export interface MaintenanceWindow {
+  id: string;
+  created_at: ISODate;
+  updated_at: ISODate;
+  name: string;
+  description: string | null;
+  starts_at: ISODate;
+  ends_at: ISODate;
+  enabled: boolean;
+  target_type: MaintenanceTarget;
+  target_ids: string[];
+  silence_alerts: boolean;
+  silence_notifications: boolean;
+  created_by: string | null;
+  active: boolean;
+}
+
+export interface MaintenanceWindowPayload {
+  name: string;
+  description?: string | null;
+  starts_at: ISODate;
+  ends_at: ISODate;
+  enabled?: boolean;
+  target_type?: MaintenanceTarget;
+  target_ids?: string[];
+  silence_alerts?: boolean;
+  silence_notifications?: boolean;
+}
+
+export type MaintenanceWindowUpdatePayload = Partial<MaintenanceWindowPayload>;
+
+/* ------------------------------------------------------------------- reports */
+
+export type ReportKind = "fleet" | "compliance" | "traffic" | "alerts";
+
+export type ReportStatus = "pending" | "generating" | "ready" | "failed";
+
+export interface Report {
+  id: string;
+  created_at: ISODate;
+  updated_at: ISODate;
+  name: string;
+  kind: ReportKind;
+  status: ReportStatus;
+  period_start: ISODate;
+  period_end: ISODate;
+  params: Record<string, unknown>;
+  size_bytes: number | null;
+  checksum_sha256: string | null;
+  error: string | null;
+  generated_at: ISODate | null;
+  created_by: string | null;
+  download_url: string | null;
+}
+
+export interface ReportPayload {
+  name?: string | null;
+  kind: ReportKind;
+  period_days: number;
+  params?: Record<string, unknown>;
+}
+
+/* -------------------------------------------------------------- bulk actions */
+
+export type BulkAction =
+  | "maintenance_on"
+  | "maintenance_off"
+  | "command"
+  | "backup"
+  | "firmware_upgrade"
+  | "reboot";
+
+export interface BulkDeviceAction {
+  action: BulkAction;
+  device_ids: string[];
+  params?: Record<string, unknown>;
+}
+
+export interface BulkDeviceResult {
+  device_id: string;
+  name: string;
+  status: "ok" | "failed" | "skipped";
+  message: string | null;
+}
+
+export interface BulkDeviceResponse {
+  action: string;
+  total: number;
+  succeeded: number;
+  failed: number;
+  results: BulkDeviceResult[];
+}
+
+export interface CsvImportError {
+  row: number;
+  error: string;
+}
+
+export interface CsvImportResult {
+  created: number;
+  skipped: number;
+  errors: CsvImportError[];
+  devices: Array<Record<string, unknown>>;
+}
+
 export interface User {
   id: string;
   created_at: ISODate;

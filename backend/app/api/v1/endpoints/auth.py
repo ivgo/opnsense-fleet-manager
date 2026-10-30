@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from urllib.parse import quote
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import RedirectResponse, Response
@@ -425,7 +426,6 @@ async def saml_authorize(tenant: str | None = None) -> SamlAuthorizeResponse:
 @router.post("/saml/acs", summary="SAML assertion consumer service", include_in_schema=False)
 async def saml_acs(
     request: Request,
-    response: Response,
     session: SessionDep,
     ip: ClientIP,
     saml_response: str = Form(..., alias="SAMLResponse"),
@@ -444,14 +444,21 @@ async def saml_acs(
         )
     except Exception as exc:  # noqa: BLE001 - the SPA renders the error
         message = exc.message if isinstance(exc, AuthenticationError) else str(exc)
-        from urllib.parse import quote
-
         return RedirectResponse(
             f"{target}#error={quote(message or 'SAML login failed')}", status_code=303
         )
     assert outcome.tokens is not None
-    _set_auth_cookies(response, outcome.tokens.access_token, outcome.tokens.refresh_token, outcome.tokens.expires_in)
-    return RedirectResponse(target, status_code=303)
+    # The cookies must be attached to the response that is actually returned, not
+    # to the injected Response object (which FastAPI discards once a new response
+    # is returned from the handler).
+    redirect = RedirectResponse(target, status_code=303)
+    _set_auth_cookies(
+        redirect,
+        outcome.tokens.access_token,
+        outcome.tokens.refresh_token,
+        outcome.tokens.expires_in,
+    )
+    return redirect
 
 
 @router.get("/saml/metadata", summary="SAML service provider metadata", include_in_schema=False)

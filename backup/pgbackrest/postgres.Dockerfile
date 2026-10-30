@@ -39,5 +39,9 @@ RUN mkdir -p /etc/pgbackrest /var/log/pgbackrest /var/lib/pgbackrest /var/spool/
 COPY backup/pgbackrest/pgbackrest.conf /etc/pgbackrest/pgbackrest.conf
 RUN chown postgres:postgres /etc/pgbackrest/pgbackrest.conf
 
-# pgBackRest runs as root via docker exec -u root from the worker; the official
-# postgres entrypoint handles the postgres user and data-dir ownership.
+# Custom entrypoint to fix archive permissions on startup
+COPY backup/pgbackrest/entrypoint-fix-permissions.sh /usr/local/bin/entrypoint-fix-permissions.sh
+RUN chmod +x /usr/local/bin/entrypoint-fix-permissions.sh
+
+ENTRYPOINT ["/usr/local/bin/entrypoint-fix-permissions.sh"]
+CMD ["postgres"]

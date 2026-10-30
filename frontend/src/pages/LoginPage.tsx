@@ -30,6 +30,7 @@ import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
 import { useQuery } from "@tanstack/react-query";
 
 import { authApi } from "@/api/endpoints";
+import { toApiError } from "@/api/client";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { clearError, ldapLogin, login, resetMfa, verifyMfa } from "@/store/authSlice";
 import { brandGradient } from "@/theme";
@@ -57,6 +58,7 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [code, setCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [ssoError, setSsoError] = useState<string | null>(null);
 
   const providers = useQuery({
     queryKey: ["auth", "providers"],
@@ -116,8 +118,17 @@ export function LoginPage() {
     try {
       const result = await authApi.oidcAuthorize(tenant.trim() || undefined, false);
       window.location.assign(result.authorization_url);
-    } catch {
-      /* surfaced by the API error toast on the next request; keep the form usable */
+    } catch (error) {
+      setSsoError(toApiError(error).message);
+    }
+  };
+
+  const startSaml = async () => {
+    try {
+      const result = await authApi.samlAuthorize(tenant.trim() || undefined);
+      window.location.assign(result.authorization_url);
+    } catch (error) {
+      setSsoError(toApiError(error).message);
     }
   };
 
@@ -204,7 +215,7 @@ export function LoginPage() {
         <Stack direction="row" spacing={2} sx={{ position: "relative", zIndex: 1, opacity: 0.7 }}>
           <Typography variant="caption">OFME v1.0.0</Typography>
           <Typography variant="caption">API v1</Typography>
-          <Typography variant="caption">TLS Â· MFA Â· RBAC</Typography>
+          <Typography variant="caption">TLS · MFA · RBAC</Typography>
         </Stack>
       </Box>
 
@@ -259,6 +270,12 @@ export function LoginPage() {
           {error && (
             <Alert severity="error" sx={{ mb: 2 }} onClose={() => dispatch(clearError())}>
               {error}
+            </Alert>
+          )}
+
+          {ssoError && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setSsoError(null)}>
+              {ssoError}
             </Alert>
           )}
 
@@ -382,18 +399,31 @@ export function LoginPage() {
                   Sign in
                 </Button>
 
-                {(providers.data?.oidc || providers.data?.entra_id) && (
+                {(providers.data?.oidc || providers.data?.entra_id || providers.data?.saml) && (
                   <>
                     <Divider sx={{ my: 0.5 }}>or</Divider>
-                    <Button
-                      type="button"
-                      variant="outlined"
-                      size="large"
-                      onClick={startOidc}
-                      startIcon={<VerifiedUserOutlinedIcon />}
-                    >
-                      Continue with single sign-on
-                    </Button>
+                    {(providers.data?.oidc || providers.data?.entra_id) && (
+                      <Button
+                        type="button"
+                        variant="outlined"
+                        size="large"
+                        onClick={startOidc}
+                        startIcon={<VerifiedUserOutlinedIcon />}
+                      >
+                        Continue with single sign-on
+                      </Button>
+                    )}
+                    {providers.data?.saml && (
+                      <Button
+                        type="button"
+                        variant="outlined"
+                        size="large"
+                        onClick={startSaml}
+                        startIcon={<VerifiedUserOutlinedIcon />}
+                      >
+                        Continue with SAML
+                      </Button>
+                    )}
                   </>
                 )}
               </Stack>
@@ -421,7 +451,7 @@ export function LoginPage() {
           >
             <Typography variant="caption" color="text.secondary" component="div">
               <strong>Sessions expire after the configured access-token lifetime.</strong> A refresh token is
-              rotated on every renewal; revoking all sessions is available from Settings â†’ Security.
+              rotated on every renewal; revoking all sessions is available from Settings → Security.
             </Typography>
           </Box>
         </Box>

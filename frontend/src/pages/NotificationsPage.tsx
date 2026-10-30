@@ -74,8 +74,7 @@ function sanitizeMessage(message: string): string {
   return DOMPurify.sanitize(message, {
     ALLOWED_TAGS: ["b", "i", "strong", "em", "u", "br", "code", "pre", "a"],
     ALLOWED_ATTR: ["href", "title", "target", "rel"],
-    ADD_ATTR: ["target"],
-    ADD_REL: ["noopener", "noreferrer"],
+    ADD_ATTR: ["target", "rel"],
   });
 }
 

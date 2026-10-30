@@ -182,5 +182,15 @@ export const qk = {
     current: ["tenants", "current"] as const,
     stats: (id: string) => ["tenants", id, "stats"] as const,
   },
+  maintenance: {
+    all: ["maintenance-windows"] as const,
+    list: ["maintenance-windows", "list"] as const,
+    active: ["maintenance-windows", "active"] as const,
+  },
+  reports: {
+    all: ["reports"] as const,
+    list: ["reports", "list"] as const,
+    detail: (id: string) => ["reports", "detail", id] as const,
+  },
   version: ["version"] as const,
 };

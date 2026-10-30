@@ -26,6 +26,7 @@ from app.api.v1.endpoints import (
     metrics,
     nat,
     networking,
+    pgbackrest,
     policies,
     reports,
     rules,
@@ -85,6 +86,7 @@ api_router.include_router(ztp.router)
 
 # --------------------------------------------------------------------------- operations
 api_router.include_router(backups.router)
+api_router.include_router(pgbackrest.router)
 api_router.include_router(jobs.jobs_router)
 api_router.include_router(jobs.tasks_router)
 api_router.include_router(alerts.alerts_router)

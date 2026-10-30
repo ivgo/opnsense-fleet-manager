@@ -10,7 +10,6 @@ import {
   clearTokens,
   emitSessionExpired,
   getAccessToken,
-  getRefreshToken,
   getTenantId,
   setTokens,
 } from "./tokenStore";
@@ -204,6 +203,22 @@ export async function getBlob(url: string, options?: RequestOptions): Promise<Bl
   const response = await api.get<Blob>(url, {
     ...mergeOptions(options),
     responseType: "blob",
+  });
+  return response.data;
+}
+
+/**
+ * Upload a multipart form. Axios lets the browser set the boundary, so the
+ * content type is only hinted here (CSV import).
+ */
+export async function postForm<T>(
+  url: string,
+  body: FormData,
+  options?: RequestOptions,
+): Promise<T> {
+  const response = await api.post<T>(url, body, {
+    ...mergeOptions(options),
+    headers: { ...(options?.headers ?? {}), "Content-Type": "multipart/form-data" },
   });
   return response.data;
 }
