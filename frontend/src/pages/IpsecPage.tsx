@@ -26,6 +26,11 @@ import type {
   IpsecPhase1Payload,
   IpsecPhase2,
   IpsecPhase2Payload,
+  IpsecAuthMethod,
+  IpsecIkeType,
+  IpsecMode,
+  IpsecProtocol,
+  IpsecNatTraversal,
 } from "@/api/types";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import DataTable, { type DataTableColumn } from "@/components/DataTable";
@@ -43,11 +48,11 @@ interface Phase1FormState {
   name: string;
   description: string;
   enabled: boolean;
-  iketype: "ikev1" | "ikev2";
+  iketype: IpsecIkeType;
   interface: string;
   remote_gateway: string;
   local_gateway: string;
-  authentication_method: string;
+  authentication_method: IpsecAuthMethod;
   pre_shared_key: string;
   my_identifier: string;
   peer_identifier: string;
@@ -57,7 +62,7 @@ interface Phase1FormState {
   lifetime: string;
   dpd_delay: string;
   dpd_maxfail: string;
-  nat_traversal: string;
+  nat_traversal: IpsecNatTraversal;
 }
 
 interface Phase2FormState {
@@ -66,8 +71,8 @@ interface Phase2FormState {
   name: string;
   description: string;
   enabled: boolean;
-  mode: string;
-  protocol: string;
+  mode: IpsecMode;
+  protocol: IpsecProtocol;
   local_net: string;
   remote_net: string;
   encryption: string;
@@ -81,11 +86,11 @@ const EMPTY_PHASE1: Phase1FormState = {
   name: "",
   description: "",
   enabled: true,
-  iketype: "ikev2",
+  iketype: "ikev2" as IpsecIkeType,
   interface: "wan",
   remote_gateway: "",
   local_gateway: "",
-  authentication_method: "pre_shared_key",
+  authentication_method: "pre_shared_key" as IpsecAuthMethod,
   pre_shared_key: "",
   my_identifier: "",
   peer_identifier: "",
@@ -95,7 +100,7 @@ const EMPTY_PHASE1: Phase1FormState = {
   lifetime: "28800",
   dpd_delay: "10",
   dpd_maxfail: "5",
-  nat_traversal: "force",
+  nat_traversal: "force" as IpsecNatTraversal,
 };
 
 const EMPTY_PHASE2: Phase2FormState = {
@@ -104,8 +109,8 @@ const EMPTY_PHASE2: Phase2FormState = {
   name: "",
   description: "",
   enabled: true,
-  mode: "tunnel",
-  protocol: "esp",
+  mode: "tunnel" as IpsecMode,
+  protocol: "esp" as IpsecProtocol,
   local_net: "",
   remote_net: "",
   encryption: "aes256gcm16",
@@ -286,7 +291,7 @@ export function IpsecPage() {
         lifetime: Number(phase1Form.lifetime) || 28800,
         dpd_delay: Number(phase1Form.dpd_delay) || 10,
         dpd_maxfail: Number(phase1Form.dpd_maxfail) || 5,
-        nat_traversal: phase1Form.nat_traversal as "force" | "auto" | "disable",
+        nat_traversal: phase1Form.nat_traversal,
       };
       if (editingPhase1) {
         return ipsecApi.updatePhase1(editingPhase1.id, {
@@ -944,7 +949,7 @@ export function IpsecPage() {
             select
             label="Auth Method"
             value={phase1Form.authentication_method}
-            onChange={(event) => setPhase1Form((value) => ({ ...value, authentication_method: event.target.value }))}
+            onChange={(event) => setPhase1Form((value) => ({ ...value, authentication_method: event.target.value as IpsecAuthMethod }))}
             fullWidth
           >
             {AUTH_METHODS.map((method) => (
@@ -1008,7 +1013,7 @@ export function IpsecPage() {
             select
             label="NAT Traversal"
             value={phase1Form.nat_traversal}
-            onChange={(event) => setPhase1Form((value) => ({ ...value, nat_traversal: event.target.value }))}
+            onChange={(event) => setPhase1Form((value) => ({ ...value, nat_traversal: event.target.value as IpsecNatTraversal }))}
             fullWidth
           >
             {NAT_TRAVERSAL_OPTIONS.map((opt) => (
@@ -1143,7 +1148,7 @@ export function IpsecPage() {
             select
             label="Mode"
             value={phase2Form.mode}
-            onChange={(event) => setPhase2Form((value) => ({ ...value, mode: event.target.value }))}
+            onChange={(event) => setPhase2Form((value) => ({ ...value, mode: event.target.value as IpsecMode }))}
             fullWidth
           >
             {MODE_OPTIONS.map((opt) => (
@@ -1158,7 +1163,7 @@ export function IpsecPage() {
             select
             label="Protocol"
             value={phase2Form.protocol}
-            onChange={(event) => setPhase2Form((value) => ({ ...value, protocol: event.target.value }))}
+            onChange={(event) => setPhase2Form((value) => ({ ...value, protocol: event.target.value as IpsecProtocol }))}
             fullWidth
           >
             {PROTOCOL_OPTIONS.map((opt) => (

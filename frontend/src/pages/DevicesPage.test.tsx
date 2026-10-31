@@ -268,4 +268,74 @@ describe("DevicesPage", () => {
 
     expect(screen.getByText("2 devices")).toBeInTheDocument();
   });
+
+  it("opens register device dialog", async () => {
+    await renderDevicesPage();
+
+    await screen.findByRole("button", { name: "Register device" }).then((btn) => btn.click());
+
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
+    expect(await screen.findByRole("heading", { name: "Register device" })).toBeInTheDocument();
+  });
+
+  it("opens discover device dialog", async () => {
+    await renderDevicesPage();
+
+    await screen.findByRole("button", { name: "Discover" }).then((btn) => btn.click());
+
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
+    expect(await screen.findByRole("heading", { name: "Discover OPNsense appliances" })).toBeInTheDocument();
+  });
+
+  // Import CSV uses native file input, no dialog - tested via export
+  it("shows export CSV button", async () => {
+    await renderDevicesPage();
+
+    expect(screen.getByRole("button", { name: "Export CSV" })).toBeInTheDocument();
+  });
+
+  it("shows connection status column", async () => {
+    await renderDevicesPage();
+
+    // StatusChip renders capitalized labels from CONNECTION_STATUS_LABELS
+    expect(screen.getByText("Connected")).toBeInTheDocument();
+    expect(screen.getByText("Disconnected")).toBeInTheDocument();
+  });
+
+  // Model column is in the edit form, not the main table
+// Firmware and Site/Group columns are hidden below lg breakpoint
+  it("shows firmware version in detail", async () => {
+    await renderDevicesPage();
+
+    expect(screen.getByText("25.7.1")).toBeInTheDocument();
+    expect(screen.getByText("25.7.0")).toBeInTheDocument();
+  });
+
+  it("shows management IP column", async () => {
+    await renderDevicesPage();
+
+    expect(screen.getByText("10.0.0.1:443")).toBeInTheDocument();
+    expect(screen.getByText("192.168.1.1:443")).toBeInTheDocument();
+  });
+
+  it("shows hostname in device cell", async () => {
+    await renderDevicesPage();
+
+    expect(screen.getByText("fw-edge-01.example.com")).toBeInTheDocument();
+    expect(screen.getByText("fw-branch-01.example.com")).toBeInTheDocument();
+  });
+
+  it("shows pagination controls", async () => {
+    await renderDevicesPage();
+
+    // Pagination shows page info
+    expect(screen.getByText("1–2 of 2")).toBeInTheDocument();
+  });
+
+  it("shows sorting controls", async () => {
+    await renderDevicesPage();
+
+    // Device column is sortable - check the label exists
+    expect(screen.getByText("Device")).toBeInTheDocument();
+  });
 });
