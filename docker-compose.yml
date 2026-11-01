@@ -36,6 +36,7 @@ x-backend: &backend
     - ofme-pki:/etc/ofme/pki
     - ofme-logs:/var/log/ofme
     - ofme-git:/tmp/ofme-git
+    - ofme-secrets:/var/lib/ofme/secrets
   depends_on:
     postgres:
       condition: service_healthy
@@ -377,6 +378,7 @@ volumes:
   ofme-alertmanager:
   ofme-vault:
   ofme-pgbackrest:
+  ofme-secrets:
 
 networks:
   ofme:

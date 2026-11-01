@@ -66,17 +66,17 @@ def _run_backup(backup_type: str = "incr") -> dict[str, Any]:
 
 def _run_info() -> dict[str, Any]:
     """Get pgBackRest info for the ofme stanza."""
-    return _run_pgbackrest("--stanza=ofme", "info")
+    return _run_pgbackrest("--stanza=ofme", "--log-level-console=info", "info")
 
 
 def _run_verify() -> dict[str, Any]:
     """Verify pgBackRest repository integrity."""
-    return _run_pgbackrest("--stanza=ofme", "verify")
+    return _run_pgbackrest("--stanza=ofme", "--log-level-console=info", "verify")
 
 
 def _run_expire() -> dict[str, Any]:
     """Apply retention policies to pgBackRest repository."""
-    return _run_pgbackrest("--stanza=ofme", "expire")
+    return _run_pgbackrest("--stanza=ofme", "--log-level-console=info", "expire")
 
 
 async def _create(
@@ -93,6 +93,40 @@ async def _create(
         "command": result["command"],
         "output": result["stdout"],
         "status": "completed",
+    }
+
+
+async def _info(
+    session: Any, tenant_id: Any, params: dict[str, Any]
+) -> dict[str, Any]:
+    """Get pgBackRest repository information."""
+    result = await asyncio.to_thread(_run_info)
+    return {
+        "stanza": "ofme",
+        "status": "ok",
+        "output": result["stdout"],
+    }
+
+
+async def _verify(
+    session: Any, tenant_id: Any, params: dict[str, Any]
+) -> dict[str, Any]:
+    """Verify pgBackRest repository integrity."""
+    result = await asyncio.to_thread(_run_verify)
+    return {
+        "status": "verified",
+        "output": result["stdout"],
+    }
+
+
+async def _expire(
+    session: Any, tenant_id: Any, params: dict[str, Any]
+) -> dict[str, Any]:
+    """Apply retention policies to pgBackRest repository."""
+    result = await asyncio.to_thread(_run_expire)
+    return {
+        "status": "expired",
+        "output": result["stdout"],
     }
 
 
@@ -118,4 +152,87 @@ def create(
         raise UpstreamError("pgBackRest backup exceeded its time limit") from exc
 
 
-__all__ = ["create", "_run_info", "_run_verify", "_run_expire"]
+# Task names for pgBackRest operations
+TASK_PGBACKREST_INFO = "ofme.backup.pgbackrest_info"
+TASK_PGBACKREST_VERIFY = "ofme.backup.pgbackrest_verify"
+TASK_PGBACKREST_EXPIRE = "ofme.backup.pgbackrest_expire"
+
+
+@celery_app.task(
+    bind=True,
+    name=TASK_PGBACKREST_INFO,
+    autoretry_for=(UpstreamError,),
+    retry_backoff=True,
+    retry_backoff_max=60,
+    retry_jitter=True,
+    max_retries=1,
+)
+def info(
+    self, job_id: str | None = None, tenant_id: str | None = None, params: dict | None = None
+) -> dict:  # noqa: ANN001
+    """Get pgBackRest repository information."""
+    try:
+        return execute_task(
+            TASK_PGBACKREST_INFO, _info, job_id=job_id, tenant_id=tenant_id, params=params
+        )
+    except SoftTimeLimitExceeded as exc:
+        log.error("pgbackrest_info.timeout", job=job_id)
+        raise UpstreamError("pgBackRest info exceeded its time limit") from exc
+
+
+@celery_app.task(
+    bind=True,
+    name=TASK_PGBACKREST_VERIFY,
+    autoretry_for=(UpstreamError,),
+    retry_backoff=True,
+    retry_backoff_max=120,
+    retry_jitter=True,
+    max_retries=1,
+)
+def verify(
+    self, job_id: str | None = None, tenant_id: str | None = None, params: dict | None = None
+) -> dict:  # noqa: ANN001
+    """Verify pgBackRest repository integrity."""
+    try:
+        return execute_task(
+            TASK_PGBACKREST_VERIFY, _verify, job_id=job_id, tenant_id=tenant_id, params=params
+        )
+    except SoftTimeLimitExceeded as exc:
+        log.error("pgbackrest_verify.timeout", job=job_id)
+        raise UpstreamError("pgBackRest verify exceeded its time limit") from exc
+
+
+@celery_app.task(
+    bind=True,
+    name=TASK_PGBACKREST_EXPIRE,
+    autoretry_for=(UpstreamError,),
+    retry_backoff=True,
+    retry_backoff_max=120,
+    retry_jitter=True,
+    max_retries=1,
+)
+def expire(
+    self, job_id: str | None = None, tenant_id: str | None = None, params: dict | None = None
+) -> dict:  # noqa: ANN001
+    """Apply retention policies to pgBackRest repository."""
+    try:
+        return execute_task(
+            TASK_PGBACKREST_EXPIRE, _expire, job_id=job_id, tenant_id=tenant_id, params=params
+        )
+    except SoftTimeLimitExceeded as exc:
+        log.error("pgbackrest_expire.timeout", job=job_id)
+        raise UpstreamError("pgBackRest expire exceeded its time limit") from exc
+
+
+__all__ = [
+    "create",
+    "info",
+    "verify",
+    "expire",
+    "_run_info",
+    "_run_verify",
+    "_run_expire",
+    "TASK_PGBACKREST_INFO",
+    "TASK_PGBACKREST_VERIFY",
+    "TASK_PGBACKREST_EXPIRE",
+]

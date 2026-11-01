@@ -199,7 +199,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                 key=CSRF_COOKIE_NAME,
                 value=new_token,
                 max_age=CSRF_COOKIE_MAX_AGE,
-                httponly=True,
+                httponly=False,  # Must be readable by JS for double-submit pattern
                 secure=settings.is_production,
                 samesite="lax",
                 path="/",

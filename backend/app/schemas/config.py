@@ -12,6 +12,7 @@ from app.models.enums import (
     RuleAction,
     RuleDirection,
     TemplateKind,
+    VpnProtocol,
 )
 from app.schemas.common import TimestampedModel
 
@@ -362,6 +363,115 @@ class DnsRecordOut(TimestampedModel):
     port: int | None
     description: str | None
     enabled: bool
+
+
+# ------------------------------------------------------------------ IPsec
+class IpsecPhase1Create(BaseModel):
+    device_id: uuid.UUID
+    name: str = Field(min_length=1, max_length=255)
+    description: str | None = None
+    enabled: bool = True
+    iketype: str = Field("ikev2", pattern=r"^(ikev1|ikev2)$")
+    interface: str = Field("wan", min_length=1, max_length=32)
+    remote_gateway: str = Field(min_length=1, max_length=255)
+    local_gateway: str | None = Field(None, max_length=255)
+    authentication_method: str = Field("pre_shared_key", min_length=1, max_length=32)
+    pre_shared_key: str | None = None
+    my_identifier: str | None = Field(None, max_length=255)
+    peer_identifier: str | None = Field(None, max_length=255)
+    encryption: list[str] = Field(default_factory=lambda: ["aes256gcm16"])
+    hash: list[str] = Field(default_factory=lambda: ["sha256"])
+    dh_group: str = Field("14", min_length=1, max_length=16)
+    lifetime: int = Field(28800, ge=60, le=86400)
+    dpd_delay: int = Field(10, ge=0, le=60)
+    dpd_maxfail: int = Field(5, ge=1, le=10)
+    nat_traversal: str = Field("force", pattern=r"^(force|disable|auto)$")
+
+
+class IpsecPhase1Update(BaseModel):
+    description: str | None = None
+    enabled: bool | None = None
+    iketype: str | None = Field(None, pattern=r"^(ikev1|ikev2)$")
+    interface: str | None = Field(None, min_length=1, max_length=32)
+    remote_gateway: str | None = Field(None, max_length=255)
+    local_gateway: str | None = Field(None, max_length=255)
+    authentication_method: str | None = Field(None, min_length=1, max_length=32)
+    pre_shared_key: str | None = None
+    my_identifier: str | None = Field(None, max_length=255)
+    peer_identifier: str | None = Field(None, max_length=255)
+    encryption: list[str] | None = None
+    hash: list[str] | None = None
+    dh_group: str | None = Field(None, min_length=1, max_length=16)
+    lifetime: int | None = Field(None, ge=60, le=86400)
+    dpd_delay: int | None = Field(None, ge=0, le=60)
+    dpd_maxfail: int | None = Field(None, ge=1, le=10)
+    nat_traversal: str | None = Field(None, pattern=r"^(force|disable|auto)$")
+
+
+class IpsecPhase1Out(TimestampedModel):
+    device_id: uuid.UUID
+    name: str
+    description: str | None
+    enabled: bool
+    iketype: str
+    interface: str
+    remote_gateway: str
+    local_gateway: str | None
+    authentication_method: str
+    my_identifier: str | None
+    peer_identifier: str | None
+    encryption: list[str]
+    hash: list[str]
+    dh_group: str
+    lifetime: int
+    dpd_delay: int
+    dpd_maxfail: int
+    nat_traversal: str
+
+
+class IpsecPhase2Create(BaseModel):
+    device_id: uuid.UUID
+    phase1_id: uuid.UUID
+    name: str = Field(min_length=1, max_length=255)
+    description: str | None = None
+    enabled: bool = True
+    mode: str = Field("tunnel", pattern=r"^(tunnel|transport)$")
+    protocol: str = Field("esp", pattern=r"^(esp|ah|esp-ah)$")
+    local_net: str = Field(min_length=1, max_length=255)
+    remote_net: str = Field(min_length=1, max_length=255)
+    encryption: list[str] = Field(default_factory=lambda: ["aes256gcm16"])
+    hash: list[str] = Field(default_factory=lambda: ["sha256"])
+    pfs_group: str = Field("14", min_length=1, max_length=16)
+    lifetime: int = Field(3600, ge=60, le=86400)
+
+
+class IpsecPhase2Update(BaseModel):
+    description: str | None = None
+    enabled: bool | None = None
+    mode: str | None = Field(None, pattern=r"^(tunnel|transport)$")
+    protocol: str | None = Field(None, pattern=r"^(esp|ah|esp-ah)$")
+    local_net: str | None = Field(None, max_length=255)
+    remote_net: str | None = Field(None, max_length=255)
+    encryption: list[str] | None = None
+    hash: list[str] | None = None
+    pfs_group: str | None = Field(None, min_length=1, max_length=16)
+    lifetime: int | None = Field(None, ge=60, le=86400)
+
+
+class IpsecPhase2Out(TimestampedModel):
+    device_id: uuid.UUID
+    phase1_id: uuid.UUID
+    name: str
+    description: str | None
+    enabled: bool
+    mode: str
+    protocol: str
+    local_net: str
+    remote_net: str
+    encryption: list[str]
+    hash: list[str]
+    pfs_group: str
+    lifetime: int
 
 
 # ------------------------------------------------------------------ diff / apply

@@ -64,6 +64,12 @@ import type {
   HaClusterPayload,
   HaFailoverResult,
   InterfaceInfo,
+  IpsecPhase1,
+  IpsecPhase1Payload,
+  IpsecPhase1Update,
+  IpsecPhase2,
+  IpsecPhase2Payload,
+  IpsecPhase2Update,
   Job,
   JobPayload,
   LoginPayload,
@@ -377,6 +383,25 @@ export const dnsApi = {
   removeRecord: (id: string) => del<Message>(`${P}/dns/records/${id}`),
   apply: (payload: { device_id: string; dry_run?: boolean; apply?: boolean }) =>
     post<Record<string, unknown>>(`${P}/dns/apply`, payload),
+};
+
+/* ------------------------------------------------------------------ IPsec */
+
+export const ipsecApi = {
+  phase1: (query?: ListQuery & { device_id?: string }) =>
+    get<Page<IpsecPhase1>>(`${P}/configuration/ipsec/phase1`, listParams(query)),
+  phase1ForDevice: (deviceId: string) => get<IpsecPhase1[]>(`${P}/configuration/ipsec/phase1/${deviceId}`),
+  createPhase1: (payload: IpsecPhase1Payload) => post<IpsecPhase1>(`${P}/configuration/ipsec/phase1`, payload),
+  updatePhase1: (id: string, payload: IpsecPhase1Update) => patch<IpsecPhase1>(`${P}/configuration/ipsec/phase1/${id}`, payload),
+  removePhase1: (id: string) => del<Message>(`${P}/configuration/ipsec/phase1/${id}`),
+  phase2: (query?: ListQuery & { device_id?: string }) =>
+    get<Page<IpsecPhase2>>(`${P}/configuration/ipsec/phase2`, listParams(query)),
+  phase2ForDevice: (deviceId: string) => get<IpsecPhase2[]>(`${P}/configuration/ipsec/phase2/${deviceId}`),
+  createPhase2: (payload: IpsecPhase2Payload) => post<IpsecPhase2>(`${P}/configuration/ipsec/phase2`, payload),
+  updatePhase2: (id: string, payload: IpsecPhase2Update) => patch<IpsecPhase2>(`${P}/configuration/ipsec/phase2/${id}`, payload),
+  removePhase2: (id: string) => del<Message>(`${P}/configuration/ipsec/phase2/${id}`),
+  apply: (payload: { device_id: string; dry_run?: boolean; apply?: boolean }) =>
+    post<Record<string, unknown>>(`${P}/configuration/apply`, { ...payload, resources: ["ipsec"] }),
 };
 
 /* ------------------------------------------------------------ firewall rules */
