@@ -412,7 +412,7 @@ async def saml_authorize(tenant: str | None = None) -> SamlAuthorizeResponse:
         subject=f"saml:{tenant or '-'}",
         token_type="saml_state",
         tenant_id=None,
-        ttl_seconds=600,
+        ttl_seconds=1800,  # 30 minutes to accommodate slow IdPs and MFA flows
         extra={"purpose": "saml_state", "tenant": tenant, "request_id": request_id},
     )
     return SamlAuthorizeResponse(
